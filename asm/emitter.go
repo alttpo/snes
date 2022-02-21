@@ -768,3 +768,93 @@ func (a *Emitter) AND_imm8_b(m uint8) {
 	d[1] = m
 	a.emit2("and.b", "#$%02x", d)
 }
+
+func (a *Emitter) PHB() {
+	a.emit1("phb", [1]byte{0x8B})
+}
+
+func (a *Emitter) PHA() {
+	a.emit1("pha", [1]byte{0x48})
+}
+
+func (a *Emitter) PHX() {
+	a.emit1("phx", [1]byte{0xDA})
+}
+
+func (a *Emitter) PHY() {
+	a.emit1("phy", [1]byte{0x5A})
+}
+
+func (a *Emitter) PHP() {
+	a.emit1("php", [1]byte{0x08})
+}
+
+func (a *Emitter) PHD() {
+	a.emit1("phd", [1]byte{0x0B})
+}
+
+func (a *Emitter) PLD() {
+	a.emit1("pld", [1]byte{0x2B})
+}
+
+func (a *Emitter) PLP() {
+	a.emit1("plp", [1]byte{0x28})
+}
+
+func (a *Emitter) PLY() {
+	a.emit1("ply", [1]byte{0x7A})
+}
+
+func (a *Emitter) PLX() {
+	a.emit1("plx", [1]byte{0xFA})
+}
+
+func (a *Emitter) PLA() {
+	a.emit1("pla", [1]byte{0x68})
+}
+
+func (a *Emitter) PLB() {
+	a.emit1("plb", [1]byte{0xAB})
+}
+
+func (a *Emitter) LDX_imm16_w(m uint16) {
+	if !a.IsX16bit() {
+		panic(fmt.Errorf("asm: LDA_imm16_w called but 'x' flag is 8-bit; call REP(0x10) or AssumeREP(0x10) first"))
+	}
+	var d [3]byte
+	d[0] = 0xA2
+	d[1], d[2] = imm16(m)
+	a.emit3("ldx.w", "#$%02[2]x%02[1]x", d)
+}
+
+func (a *Emitter) LDY_imm16_w(m uint16) {
+	if !a.IsX16bit() {
+		panic(fmt.Errorf("asm: LDA_imm16_w called but 'x' flag is 8-bit; call REP(0x10) or AssumeREP(0x10) first"))
+	}
+	var d [3]byte
+	d[0] = 0xA0
+	d[1], d[2] = imm16(m)
+	a.emit3("ldy.w", "#$%02[2]x%02[1]x", d)
+}
+
+func (a *Emitter) MVN(destBank uint8, srcBank uint8) {
+	var d [3]byte
+	d[0] = 0x54
+	d[1], d[2] = destBank, srcBank
+	a.emit3("mvn", "$%02[1]x,$%02[2]x", d)
+}
+
+func (a *Emitter) JMP_indirect(addr uint16) {
+	var d [3]byte
+	d[0] = 0x6C
+	d[1], d[2] = imm16(addr)
+	a.emit3("jmp", "($%02[2]x%02[1]x)", d)
+}
+
+func (a *Emitter) XBA() {
+	a.emit1("xba", [1]byte{0xEB})
+}
+
+func (a *Emitter) SEI() {
+	a.emit1("sei", [1]byte{0x78})
+}
