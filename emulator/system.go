@@ -1,9 +1,9 @@
 package emulator
 
 import (
-	"snes/emulator/bus"
-	"snes/emulator/cpu65c816"
-	"snes/emulator/memory"
+	"github.com/alttpo/snes/emulator/bus"
+	"github.com/alttpo/snes/emulator/cpu65c816"
+	"github.com/alttpo/snes/emulator/memory"
 	"strings"
 	"testing"
 )

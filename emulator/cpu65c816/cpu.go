@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"log"
 
-	"snes/emulator/bus"
+	"github.com/alttpo/snes/emulator/bus"
 )
 
 type instructionType struct {

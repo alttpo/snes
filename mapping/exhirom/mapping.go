@@ -1,7 +1,7 @@
 package exhirom
 
 import (
-	"snes/mapping/util"
+	"github.com/alttpo/snes/mapping/util"
 )
 
 // https://thepoorstudenthobbyist.com/2019/05/18/custom-pcb-explanation/#exhirom

@@ -1,7 +1,7 @@
 package lorom
 
 import (
-	"snes/mapping/util"
+	"github.com/alttpo/snes/mapping/util"
 )
 
 func BusAddressToPak(busAddr uint32) (pakAddr uint32, err error) {

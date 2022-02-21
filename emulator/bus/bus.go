@@ -9,7 +9,7 @@ package bus
 
 import (
 	"fmt"
-	"snes/emulator/memory"
+	"github.com/alttpo/snes/emulator/memory"
 )
 
 type busEntry struct {
