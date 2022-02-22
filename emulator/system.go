@@ -23,8 +23,8 @@ type Committer interface {
 	Commit()
 }
 
-type Grower interface {
-	Grow(n int)
+type Reserver interface {
+	Reserve(n int)
 }
 
 func (s *System) CreateEmulator() (err error) {
@@ -165,13 +165,13 @@ func (s *System) GetPC() uint32 {
 }
 
 func (s *System) RunUntil(targetPC uint32, maxCycles uint64) bool {
-	// grow the logger for enough room up to maxCycles if reasonable:
-	if grower, ok := s.Logger.(Grower); ok {
+	// reserve space in the logger for enough room up to maxCycles if reasonable:
+	if reserver, ok := s.Logger.(Reserver); ok {
 		n := int(maxCycles)
 		if maxCycles > 0x100 {
 			n = 0x100
 		}
-		grower.Grow(40 * n / 2)
+		reserver.Reserve(40 * n / 2)
 	}
 
 	for cycles := uint64(0); cycles < maxCycles; {

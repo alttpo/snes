@@ -1,24 +1,32 @@
 package testinglogger
 
 import (
-	"strings"
 	"testing"
+	"unsafe"
 )
 
 type TestingLogger struct {
 	testing.TB
-	sb strings.Builder
+	buf []byte
 }
 
-func (l *TestingLogger) Grow(n int) {
-	l.sb.Grow(n)
+func (l *TestingLogger) Reserve(n int) {
+	if cap(l.buf) >= n {
+		return
+	}
+
+	newbuf := make([]byte, len(l.buf), n)
+	copy(newbuf, l.buf)
+	l.buf = newbuf
 }
 
 func (l *TestingLogger) Write(p []byte) (n int, err error) {
-	return l.sb.Write(p)
+	l.buf = append(l.buf, p...)
+	return len(p), nil
 }
 
 func (l *TestingLogger) Commit() {
-	l.TB.Log(l.sb.String())
-	l.sb.Reset()
+	line := *(*string)(unsafe.Pointer(&l.buf))
+	l.TB.Log(line)
+	l.buf = l.buf[:0]
 }
