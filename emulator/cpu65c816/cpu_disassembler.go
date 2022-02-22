@@ -197,9 +197,9 @@ func (c *CPU) DisassembleTo(myPC uint16, w io.Writer) {
 	bytes := instructions[opcode].size - sizeAdjust
 	name := instructions[opcode].name
 
-	if c.Cycles == 0 {
-		_, _ = fmt.Fprintf(w, "--:----│           │                 │")
-	}
+	//if c.Cycles == 0 {
+	//	_, _ = fmt.Fprintf(w, "--:----│           │                 │")
+	//}
 
 	switch bytes {
 	case 4:
