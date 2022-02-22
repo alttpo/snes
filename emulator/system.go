@@ -4,8 +4,7 @@ import (
 	"github.com/alttpo/snes/emulator/bus"
 	"github.com/alttpo/snes/emulator/cpu65c816"
 	"github.com/alttpo/snes/emulator/memory"
-	"strings"
-	"testing"
+	"io"
 )
 
 type System struct {
@@ -17,22 +16,15 @@ type System struct {
 	WRAM [0x20000]byte
 	SRAM [0x10000]byte
 
-	Logger *SystemLogger
+	Logger io.Writer
 }
 
-type SystemLogger struct {
-	testing.TB
-	sb strings.Builder
+type Committer interface {
+	Commit()
 }
 
-func (l *SystemLogger) Log(s string) {
-	l.sb.WriteByte('\n')
-	l.sb.WriteString(s)
-}
-
-func (l *SystemLogger) Commit() {
-	l.TB.Log(l.sb.String())
-	l.sb.Reset()
+type Grower interface {
+	Grow(n int)
 }
 
 func (s *System) CreateEmulator() (err error) {
@@ -173,9 +165,18 @@ func (s *System) GetPC() uint32 {
 }
 
 func (s *System) RunUntil(targetPC uint32, maxCycles uint64) bool {
+	// grow the logger for enough room up to maxCycles if reasonable:
+	if grower, ok := s.Logger.(Grower); ok {
+		n := int(maxCycles)
+		if maxCycles > 0x100 {
+			n = 0x100
+		}
+		grower.Grow(40 * n / 2)
+	}
+
 	for cycles := uint64(0); cycles < maxCycles; {
 		if s.Logger != nil {
-			s.Logger.Log(s.CPU.DisassembleCurrentPC())
+			s.CPU.DisassembleCurrentPC(s.Logger)
 		}
 		if s.GetPC() == targetPC {
 			break
@@ -184,8 +185,10 @@ func (s *System) RunUntil(targetPC uint32, maxCycles uint64) bool {
 		cycles += uint64(nCycles)
 	}
 
-	if s.Logger != nil {
-		s.Logger.Commit()
+	// commit to the logger:
+	if committer, ok := s.Logger.(Committer); ok {
+		committer.Commit()
 	}
+
 	return s.GetPC() == targetPC
 }
