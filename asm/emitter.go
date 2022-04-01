@@ -687,7 +687,14 @@ func (a *Emitter) JMP_abs(label string) {
 	d[0] = 0x4C
 	d[1] = 0xFF // will be overwritten by Finalize()
 	d[2] = 0xFF // will be overwritten by Finalize()
-	a.emit3Label("jmp", label, "%s", d)
+	a.emit3Label("jmp.w", label, "%s", d)
+}
+
+func (a *Emitter) JMP_abs_imm16_w(m uint16) {
+	var d [3]byte
+	d[0] = 0x4C
+	d[1], d[2] = imm16(m)
+	a.emit3("jmp.w", "$%02[2]x%02[1]x", d)
 }
 
 func (a *Emitter) ADC_imm8_b(m uint8) {
