@@ -1072,8 +1072,8 @@ func (cpu *CPU) Step() (int, bool) {
 	}
 
 	// instruction execution
-	info := &stepInfo{ea, addr, cpu.PC, mode}
-	instructions[opcode].proc(info)
+	info := stepInfo{ea, addr, cpu.PC, mode}
+	instructions[opcode].proc(&info)
 
 	// counter and PC update
 	cpu.AllCycles += uint64(cpu.Cycles)
