@@ -131,6 +131,10 @@ func (a *Emitter) Append(e *Emitter) {
 }
 
 func (a *Emitter) WriteTextTo(w io.Writer) (err error) {
+	if w == nil {
+		return
+	}
+
 	for _, line := range a.lines {
 		offs := line.address - a.base
 		switch line.asmLineType {
