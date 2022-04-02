@@ -19,7 +19,7 @@ type instructionType struct {
 	mode   byte
 	size   byte
 	cycles byte
-	proc   func(stepInfo)
+	proc   func()
 }
 
 var (
@@ -341,6 +341,8 @@ func (c *CPU) createTable() {
 type CPU struct {
 	Bus *bus.Bus
 
+	info stepInfo
+
 	// additional emulator variables
 	AllCycles uint64 // total number of cycles of CPU instance
 	Cycles    byte   // number of cycles for this step
@@ -384,7 +386,6 @@ type CPU struct {
 
 	interrupt byte // interrupt type to perform
 	stall     int  // number of cycles to stall
-	table     [256]func(*stepInfo)
 }
 
 func New(bus *bus.Bus) (*CPU, error) {
@@ -425,9 +426,9 @@ func pagesDiffer(a, b uint16) bool {
 // addBranchCycles adds a cycle for taking a branch and adds another cycle
 // if the branch jumps to a new page
 // note 5 and 6 in [3]
-func (cpu *CPU) addBranchCycles(info stepInfo) {
+func (cpu *CPU) addBranchCycles() {
 	cpu.Cycles++
-	if pagesDiffer(cpu.PC+2, info.addr) { // at this moment PC points to jump and addr contains new addr
+	if pagesDiffer(cpu.PC+2, cpu.info.addr) { // at this moment PC points to jump and addr contains new addr
 		cpu.Cycles++
 	}
 }
@@ -502,18 +503,18 @@ func (cpu *CPU) nRead16_cross(bank byte, addr uint16) uint16 {
 	return uint16(hh)<<8 | uint16(ll)
 }
 
-func (cpu *CPU) cmdRead(info stepInfo) byte {
-	switch info.mode {
+func (cpu *CPU) cmdRead() byte {
+	switch cpu.info.mode {
 
 	case m_Accumulator:
 		return cpu.RAl
 
 	case m_Immediate, m_Immediate_flagM, m_Immediate_flagX:
-		//return cpu.Bus.EaRead(uint32(cpu.RK) << 16 | uint32(info.addr)) // addr=PC+1
-		return cpu.nRead(cpu.RK, info.addr)
+		//return cpu.Bus.EaRead(uint32(cpu.RK) << 16 | uint32(cpu.info.addr)) // addr=PC+1
+		return cpu.nRead(cpu.RK, cpu.info.addr)
 
 	case m_DP, m_DP_X, m_DP_Y, m_Stack_Relative:
-		return cpu.Bus.EaRead(uint32(info.addr)) // info.addr is uint16
+		return cpu.Bus.EaRead(uint32(cpu.info.addr)) // cpu.info.addr is uint16
 
 	case m_DP_Indirect_Long,
 		m_DP_Indirect_Long_Y,
@@ -522,34 +523,34 @@ func (cpu *CPU) cmdRead(info stepInfo) byte {
 		m_Absolute_X,
 		m_Absolute_Y,
 		m_Stack_Relative_Indirect_Y:
-		return cpu.Bus.EaRead(info.ea)
+		return cpu.Bus.EaRead(cpu.info.ea)
 
 	case m_Absolute,
 		m_DP_X_Indirect,
 		m_DP_Indirect,
 		m_DP_Indirect_Y:
-		return cpu.nRead(cpu.RDBR, info.addr)
+		return cpu.nRead(cpu.RDBR, cpu.info.addr)
 
 	default:
-		//fmt.Fprintf(&cpu.LogBuf, "cmdRead8: unknown mode %v\n", info.mode)
-		log.Println(fmt.Sprintf("cmdRead8: unknown mode %v", info.mode))
+		//fmt.Fprintf(&cpu.LogBuf, "cmdRead8: unknown mode %v\n", cpu.info.mode)
+		log.Println(fmt.Sprintf("cmdRead8: unknown mode %v", cpu.info.mode))
 
 		return 0
 	}
 
 }
 
-func (cpu *CPU) cmdRead16(info stepInfo) uint16 {
-	switch info.mode {
+func (cpu *CPU) cmdRead16() uint16 {
+	switch cpu.info.mode {
 
 	case m_Accumulator:
 		return cpu.RA
 
 	case m_Immediate, m_Immediate_flagM, m_Immediate_flagX:
-		return cpu.nRead16_wrap(cpu.RK, info.addr)
+		return cpu.nRead16_wrap(cpu.RK, cpu.info.addr)
 
 	case m_DP, m_DP_X, m_DP_Y, m_Stack_Relative:
-		return cpu.nRead16_wrap(0x00, info.addr)
+		return cpu.nRead16_wrap(0x00, cpu.info.addr)
 
 	case m_DP_Indirect_Long,
 		m_DP_Indirect_Long_Y,
@@ -559,29 +560,29 @@ func (cpu *CPU) cmdRead16(info stepInfo) uint16 {
 		m_Absolute_Y,
 		m_Absolute_X_Indirect,
 		m_Stack_Relative_Indirect_Y:
-		ll := cpu.Bus.EaRead(info.ea) // todo - zastapic to jakos?
-		hh := cpu.Bus.EaRead(info.ea + 1)
+		ll := cpu.Bus.EaRead(cpu.info.ea) // todo - zastapic to jakos?
+		hh := cpu.Bus.EaRead(cpu.info.ea + 1)
 		return uint16(hh)<<8 | uint16(ll)
 
 	case m_Absolute,
 		m_DP_X_Indirect,
 		m_DP_Indirect,
 		m_DP_Indirect_Y:
-		return cpu.nRead16_cross(cpu.RDBR, info.addr)
+		return cpu.nRead16_cross(cpu.RDBR, cpu.info.addr)
 
 	default:
-		//fmt.Fprintf(&cpu.LogBuf, "cmdRead16: unknown mode %v\n", info.mode)
-		log.Println(fmt.Sprintf("cmdRead16: unknown mode %v", info.mode))
+		//fmt.Fprintf(&cpu.LogBuf, "cmdRead16: unknown mode %v\n", cpu.info.mode)
+		log.Println(fmt.Sprintf("cmdRead16: unknown mode %v", cpu.info.mode))
 		return 0
 	}
 
 }
 
-func (cpu *CPU) cmdWrite(info stepInfo, value byte) {
-	switch info.mode {
+func (cpu *CPU) cmdWrite(value byte) {
+	switch cpu.info.mode {
 
 	case m_DP, m_DP_X, m_DP_Y, m_Stack_Relative:
-		cpu.Bus.EaWrite(uint32(info.addr), value) // info.addr is uint16
+		cpu.Bus.EaWrite(uint32(cpu.info.addr), value) // info.addr is uint16
 
 	case m_DP_Indirect_Long,
 		m_DP_Indirect_Long_Y,
@@ -590,26 +591,26 @@ func (cpu *CPU) cmdWrite(info stepInfo, value byte) {
 		m_Absolute_X,
 		m_Absolute_Y,
 		m_Stack_Relative_Indirect_Y:
-		cpu.Bus.EaWrite(info.ea, value)
+		cpu.Bus.EaWrite(cpu.info.ea, value)
 
 	case m_Absolute,
 		m_DP_X_Indirect,
 		m_DP_Indirect,
 		m_DP_Indirect_Y:
-		cpu.nWrite(cpu.RDBR, info.addr, value)
+		cpu.nWrite(cpu.RDBR, cpu.info.addr, value)
 
 	default:
-		log.Println(fmt.Sprintf("cmdWrite: unknown mode %v", info.mode))
+		log.Println(fmt.Sprintf("cmdWrite: unknown mode %v", cpu.info.mode))
 	}
 
 }
 
-func (cpu *CPU) cmdWrite16(info stepInfo, value uint16) {
-	switch info.mode {
+func (cpu *CPU) cmdWrite16(value uint16) {
+	switch cpu.info.mode {
 
 	// I'm not so sure though that m_DP modes wraps at bank0
 	case m_DP, m_DP_X, m_DP_Y, m_Stack_Relative:
-		cpu.nWrite16_wrap(0x00, info.addr, value)
+		cpu.nWrite16_wrap(0x00, cpu.info.addr, value)
 
 	case m_DP_Indirect_Long,
 		m_DP_Indirect_Long_Y,
@@ -620,17 +621,17 @@ func (cpu *CPU) cmdWrite16(info stepInfo, value uint16) {
 		m_Stack_Relative_Indirect_Y:
 		ll := byte(value)
 		hh := byte(value >> 8)
-		cpu.Bus.EaWrite(info.ea, ll)
-		cpu.Bus.EaWrite(info.ea+1, hh)
+		cpu.Bus.EaWrite(cpu.info.ea, ll)
+		cpu.Bus.EaWrite(cpu.info.ea+1, hh)
 
 	case m_Absolute,
 		m_DP_X_Indirect,
 		m_DP_Indirect,
 		m_DP_Indirect_Y:
-		cpu.nWrite16_cross(cpu.RDBR, info.addr, value)
+		cpu.nWrite16_cross(cpu.RDBR, cpu.info.addr, value)
 
 	default:
-		log.Println(fmt.Sprintf("cmdWrite16: unknown mode %v", info.mode))
+		log.Println(fmt.Sprintf("cmdWrite16: unknown mode %v", cpu.info.mode))
 	}
 }
 
@@ -1076,8 +1077,8 @@ func (cpu *CPU) Step() (int, bool) {
 	}
 
 	// instruction execution
-	info := stepInfo{ea, addr, cpu.PC, mode}
-	instructions[opcode].proc(info)
+	cpu.info = stepInfo{ea, addr, cpu.PC, mode}
+	instructions[opcode].proc()
 
 	// counter and PC update
 	cpu.AllCycles += uint64(cpu.Cycles)
@@ -1094,7 +1095,7 @@ func (cpu *CPU) Step() (int, bool) {
 // XXXX - valid for 6502
 func (cpu *CPU) nmi() {
 	cpu.push16(cpu.PC)
-	cpu.op_php(stepInfo{})
+	cpu.op_php()
 	//cpu.PC = cpu.Read16(0xFFFA)
 	cpu.PC = cpu.nRead16_cross(0x00, 0xFFEA)
 	cpu.I = 1
@@ -1125,10 +1126,10 @@ func (cpu *CPU) irq() {
 
 // ADC - Add with Carry
 // I'm not sure what I'm doing ;)
-func (cpu *CPU) op_adc(info stepInfo) {
+func (cpu *CPU) op_adc() {
 	if cpu.M == 1 {
 		a := uint16(cpu.RAl)
-		d := uint16(cpu.cmdRead(info))
+		d := uint16(cpu.cmdRead())
 		c := uint16(cpu.C)
 		sum := a + d + c
 
@@ -1158,7 +1159,7 @@ func (cpu *CPU) op_adc(info stepInfo) {
 		cpu.setZN8(cpu.RAl)
 	} else {
 		a := uint32(cpu.RA)
-		d := uint32(cpu.cmdRead16(info))
+		d := uint32(cpu.cmdRead16())
 		c := uint32(cpu.C)
 		sum := a + d + c
 
@@ -1195,19 +1196,19 @@ func (cpu *CPU) op_adc(info stepInfo) {
 }
 
 // AND - Logical AND
-func (cpu *CPU) op_and(info stepInfo) {
+func (cpu *CPU) op_and() {
 	if cpu.M == 1 {
-		cpu.RAl = cpu.RAl & cpu.cmdRead(info)
+		cpu.RAl = cpu.RAl & cpu.cmdRead()
 		cpu.setZN8(cpu.RAl)
 	} else {
-		cpu.RA = cpu.RA & cpu.cmdRead16(info)
+		cpu.RA = cpu.RA & cpu.cmdRead16()
 		cpu.setZN16(cpu.RA)
 	}
 }
 
 // ASL - Arithmetic Shift Left
-func (cpu *CPU) op_asl(info stepInfo) {
-	if info.mode == m_Accumulator {
+func (cpu *CPU) op_asl() {
+	if cpu.info.mode == m_Accumulator {
 		if cpu.M == 1 {
 			cpu.C = (cpu.RAl >> 7) & 1
 			cpu.RAl = (cpu.RAl << 1) // or cpu.RAl <<= 1
@@ -1219,44 +1220,44 @@ func (cpu *CPU) op_asl(info stepInfo) {
 		}
 	} else {
 		if cpu.M == 1 {
-			value := cpu.cmdRead(info)
+			value := cpu.cmdRead()
 			cpu.C = (value >> 7) & 1
 			value = (value << 1)
-			cpu.cmdWrite(info, value)
+			cpu.cmdWrite(value)
 			cpu.setZN8(value)
 		} else {
-			value := cpu.cmdRead16(info)
+			value := cpu.cmdRead16()
 			cpu.C = byte(value>>15) & 1
 			value = (value << 1)
-			cpu.cmdWrite16(info, value)
+			cpu.cmdWrite16(value)
 			cpu.setZN16(value)
 		}
 	}
 }
 
 // BCC - Branch if Carry Clear
-func (cpu *CPU) op_bcc(info stepInfo) {
+func (cpu *CPU) op_bcc() {
 	if cpu.C == 0 {
-		cpu.addBranchCycles(info) // always before PC change!
-		cpu.PC = info.addr
+		cpu.addBranchCycles() // always before PC change!
+		cpu.PC = cpu.info.addr
 		cpu.stepPC = 0
 	}
 }
 
 // BCS - Branch if Carry Set
-func (cpu *CPU) op_bcs(info stepInfo) {
+func (cpu *CPU) op_bcs() {
 	if cpu.C != 0 {
-		cpu.addBranchCycles(info)
-		cpu.PC = info.addr
+		cpu.addBranchCycles()
+		cpu.PC = cpu.info.addr
 		cpu.stepPC = 0
 	}
 }
 
 // BEQ - Branch if Equal
-func (cpu *CPU) op_beq(info stepInfo) {
+func (cpu *CPU) op_beq() {
 	if cpu.Z != 0 {
-		cpu.addBranchCycles(info)
-		cpu.PC = info.addr
+		cpu.addBranchCycles()
+		cpu.PC = cpu.info.addr
 		cpu.stepPC = 0
 	}
 }
@@ -1288,12 +1289,12 @@ again, just the data, not the bitwise And).
 -  The z flag reflects whether the result (of the bitwise And) is zero.
 */
 
-func (cpu *CPU) op_bit(info stepInfo) {
+func (cpu *CPU) op_bit() {
 	if cpu.M == 1 {
-		val := cpu.cmdRead(info)
+		val := cpu.cmdRead()
 		cpu.setZ8(cpu.RAl & val)
 
-		if info.mode != m_Immediate {
+		if cpu.info.mode != m_Immediate {
 			cpu.setN8(val)
 			if val&0x40 != 0 {
 				cpu.V = 1
@@ -1303,10 +1304,10 @@ func (cpu *CPU) op_bit(info stepInfo) {
 		}
 
 	} else {
-		val := cpu.cmdRead16(info)
+		val := cpu.cmdRead16()
 		cpu.setZ16(cpu.RA & val)
 
-		if info.mode != m_Immediate {
+		if cpu.info.mode != m_Immediate {
 			cpu.setN16(val)
 			if val&0x4000 != 0 {
 				cpu.V = 1
@@ -1318,35 +1319,35 @@ func (cpu *CPU) op_bit(info stepInfo) {
 }
 
 // BMI - Branch if Minus
-func (cpu *CPU) op_bmi(info stepInfo) {
+func (cpu *CPU) op_bmi() {
 	if cpu.N != 0 {
-		cpu.addBranchCycles(info)
-		cpu.PC = info.addr
+		cpu.addBranchCycles()
+		cpu.PC = cpu.info.addr
 		cpu.stepPC = 0
 	}
 }
 
 // BNE - Branch if Not Equal
-func (cpu *CPU) op_bne(info stepInfo) {
+func (cpu *CPU) op_bne() {
 	if cpu.Z == 0 {
-		cpu.addBranchCycles(info)
-		cpu.PC = info.addr
+		cpu.addBranchCycles()
+		cpu.PC = cpu.info.addr
 		cpu.stepPC = 0
 	}
 }
 
 // BPL - Branch if Positive
-func (cpu *CPU) op_bpl(info stepInfo) {
+func (cpu *CPU) op_bpl() {
 	if cpu.N == 0 {
-		cpu.addBranchCycles(info)
-		cpu.PC = info.addr
+		cpu.addBranchCycles()
+		cpu.PC = cpu.info.addr
 		cpu.stepPC = 0
 	}
 }
 
 // BRK - Force Interrupt
 // XXX - from now duplicate with irq?
-func (cpu *CPU) op_brk(info stepInfo) {
+func (cpu *CPU) op_brk() {
 	if cpu.E == 1 {
 		cpu.push16(cpu.PC + 2)
 		cpu.push(cpu.Flags() | 0x10)
@@ -1370,79 +1371,79 @@ func (cpu *CPU) op_brk(info stepInfo) {
 }
 
 // BVC - Branch if Overflow Clear
-func (cpu *CPU) op_bvc(info stepInfo) {
+func (cpu *CPU) op_bvc() {
 	if cpu.V == 0 {
-		cpu.addBranchCycles(info)
-		cpu.PC = info.addr
+		cpu.addBranchCycles()
+		cpu.PC = cpu.info.addr
 		cpu.stepPC = 0
 	}
 }
 
 // BVS - Branch if Overflow Set
-func (cpu *CPU) op_bvs(info stepInfo) {
+func (cpu *CPU) op_bvs() {
 	if cpu.V != 0 {
-		cpu.addBranchCycles(info)
-		cpu.PC = info.addr
+		cpu.addBranchCycles()
+		cpu.PC = cpu.info.addr
 		cpu.stepPC = 0
 	}
 }
 
 // CLC - Clear Carry Flag
-func (cpu *CPU) op_clc(info stepInfo) {
+func (cpu *CPU) op_clc() {
 	cpu.C = 0
 }
 
 // CLD - Clear Decimal Mode
-func (cpu *CPU) op_cld(info stepInfo) {
+func (cpu *CPU) op_cld() {
 	cpu.D = 0
 }
 
 // CLI - Clear Interrupt Disable
-func (cpu *CPU) op_cli(info stepInfo) {
+func (cpu *CPU) op_cli() {
 	cpu.I = 0
 }
 
 // CLV - Clear Overflow Flag
-func (cpu *CPU) op_clv(info stepInfo) {
+func (cpu *CPU) op_clv() {
 	cpu.V = 0
 }
 
 // CMP - Compare
-func (cpu *CPU) op_cmp(info stepInfo) {
+func (cpu *CPU) op_cmp() {
 	if cpu.M == 1 {
-		value := cpu.cmdRead(info)
+		value := cpu.cmdRead()
 		cpu.compare8(cpu.RAl, value)
 	} else {
-		value := cpu.cmdRead16(info)
+		value := cpu.cmdRead16()
 		cpu.compare16(cpu.RA, value)
 	}
 }
 
 // CPX - Compare X Register
-func (cpu *CPU) op_cpx(info stepInfo) {
+func (cpu *CPU) op_cpx() {
 	if cpu.X == 1 {
-		value := cpu.cmdRead(info)
+		value := cpu.cmdRead()
 		cpu.compare8(cpu.RXl, value)
 	} else {
-		value := cpu.cmdRead16(info)
+		value := cpu.cmdRead16()
 		cpu.compare16(cpu.RX, value)
 	}
 }
 
 // CPY - Compare Y Register
-func (cpu *CPU) op_cpy(info stepInfo) {
+func (cpu *CPU) op_cpy() {
 	if cpu.X == 1 {
-		value := cpu.cmdRead(info)
+		value := cpu.cmdRead()
 		cpu.compare8(cpu.RYl, value)
 	} else {
-		value := cpu.cmdRead16(info)
+		value := cpu.cmdRead16()
 		cpu.compare16(cpu.RY, value)
 	}
 }
 
 // DEC - Decrement Memory
-func (cpu *CPU) op_dec(info stepInfo) {
-	if info.mode == m_Accumulator {
+func (cpu *CPU) op_dec() {
+	if cpu.info.mode == m_Accumulator {
 		if cpu.M == 1 {
 			cpu.RAl--
 			cpu.setZN8(cpu.RAl)
@@ -1452,19 +1453,19 @@ func (cpu *CPU) op_dec(info stepInfo) {
 		}
 	} else {
 		if cpu.M == 1 {
-			value := cpu.cmdRead(info) - 1
-			cpu.cmdWrite(info, value)
+			value := cpu.cmdRead() - 1
+			cpu.cmdWrite(value)
 			cpu.setZN8(value)
 		} else {
-			value := cpu.cmdRead16(info) - 1
-			cpu.cmdWrite16(info, value)
+			value := cpu.cmdRead16() - 1
+			cpu.cmdWrite16(value)
 			cpu.setZN16(value)
 		}
 	}
 }
 
 // DEX - Decrement X Register
-func (cpu *CPU) op_dex(info stepInfo) {
+func (cpu *CPU) op_dex() {
 	if cpu.X == 1 {
 		cpu.RXl--
 		cpu.setZN8(cpu.RXl)
@@ -1475,7 +1476,7 @@ func (cpu *CPU) op_dex(info stepInfo) {
 }
 
 // DEY - Decrement Y Register
-func (cpu *CPU) op_dey(info stepInfo) {
+func (cpu *CPU) op_dey() {
 	if cpu.X == 1 {
 		cpu.RYl--
 		cpu.setZN8(cpu.RYl)
@@ -1486,19 +1487,19 @@ func (cpu *CPU) op_dey(info stepInfo) {
 }
 
 // EOR - Exclusive OR
-func (cpu *CPU) op_eor(info stepInfo) {
+func (cpu *CPU) op_eor() {
 	if cpu.M == 1 {
-		cpu.RAl = cpu.RAl ^ cpu.cmdRead(info)
+		cpu.RAl = cpu.RAl ^ cpu.cmdRead()
 		cpu.setZN8(cpu.RAl)
 	} else {
-		cpu.RA = cpu.RA ^ cpu.cmdRead16(info)
+		cpu.RA = cpu.RA ^ cpu.cmdRead16()
 		cpu.setZN16(cpu.RA)
 	}
 }
 
 // INC - Increment Memory
-func (cpu *CPU) op_inc(info stepInfo) {
-	if info.mode == m_Accumulator {
+func (cpu *CPU) op_inc() {
+	if cpu.info.mode == m_Accumulator {
 		if cpu.M == 1 {
 			cpu.RAl++
 			cpu.setZN8(cpu.RAl)
@@ -1508,19 +1509,19 @@ func (cpu *CPU) op_inc(info stepInfo) {
 		}
 	} else {
 		if cpu.M == 1 {
-			value := cpu.cmdRead(info) + 1
-			cpu.cmdWrite(info, value)
+			value := cpu.cmdRead() + 1
+			cpu.cmdWrite(value)
 			cpu.setZN8(value)
 		} else {
-			value := cpu.cmdRead16(info) + 1
-			cpu.cmdWrite16(info, value)
+			value := cpu.cmdRead16() + 1
+			cpu.cmdWrite16(value)
 			cpu.setZN16(value)
 		}
 	}
 }
 
 // INX - Increment X Register
-func (cpu *CPU) op_inx(info stepInfo) {
+func (cpu *CPU) op_inx() {
 	if cpu.X == 1 {
 		cpu.RXl++
 		cpu.setZN8(cpu.RXl)
@@ -1531,7 +1532,7 @@ func (cpu *CPU) op_inx(info stepInfo) {
 }
 
 // INY - Increment Y Register
-func (cpu *CPU) op_iny(info stepInfo) {
+func (cpu *CPU) op_iny() {
 	if cpu.X == 1 {
 		cpu.RYl++
 		cpu.setZN8(cpu.RYl)
@@ -1543,81 +1544,81 @@ func (cpu *CPU) op_iny(info stepInfo) {
 
 // JMP - Jump
 // XXX - improve that!
-func (cpu *CPU) op_jmp(info stepInfo) {
-	switch info.mode {
+func (cpu *CPU) op_jmp() {
+	switch cpu.info.mode {
 	case m_Absolute:
-		cpu.PC = info.addr
+		cpu.PC = cpu.info.addr
 	case m_Absolute_Indirect:
-		cpu.PC = cpu.nRead16_wrap(0x00, info.addr)
+		cpu.PC = cpu.nRead16_wrap(0x00, cpu.info.addr)
 	case m_Absolute_Long:
-		cpu.PC = uint16(info.ea)
-		cpu.RK = byte(info.ea >> 16)
+		cpu.PC = uint16(cpu.info.ea)
+		cpu.RK = byte(cpu.info.ea >> 16)
 	case m_Absolute_Indirect_Long:
-		cpu.PC = cpu.nRead16_wrap(0x00, info.addr)
-		cpu.RK = cpu.nRead(0x00, info.addr+2)
+		cpu.PC = cpu.nRead16_wrap(0x00, cpu.info.addr)
+		cpu.RK = cpu.nRead(0x00, cpu.info.addr+2)
 	default:
-		cpu.PC = cpu.cmdRead16(info)
+		cpu.PC = cpu.cmdRead16()
 	}
 	cpu.stepPC = 0
 }
 
 // JSL - Jump to Subroutine Long
-func (cpu *CPU) op_jsl(info stepInfo) {
+func (cpu *CPU) op_jsl() {
 	cpu.push(cpu.RK)
 	cpu.push16(cpu.PC + 3)
-	cpu.PC = uint16(info.ea)
+	cpu.PC = uint16(cpu.info.ea)
 	cpu.stepPC = 0
-	cpu.RK = byte(info.ea >> 16)
+	cpu.RK = byte(cpu.info.ea >> 16)
 }
 
 // JSR - Jump to Subroutine
-func (cpu *CPU) op_jsr(info stepInfo) {
+func (cpu *CPU) op_jsr() {
 	cpu.push16(cpu.PC + 2)
-	switch info.mode {
+	switch cpu.info.mode {
 	case m_Absolute:
-		cpu.PC = info.addr
+		cpu.PC = cpu.info.addr
 	default:
-		cpu.PC = cpu.cmdRead16(info)
+		cpu.PC = cpu.cmdRead16()
 	}
 	cpu.stepPC = 0
 }
 
 // LDA - Load Accumulator - for Immediate arguments
-func (cpu *CPU) op_lda(info stepInfo) {
+func (cpu *CPU) op_lda() {
 	if cpu.M == 1 {
-		cpu.RAl = cpu.cmdRead(info)
+		cpu.RAl = cpu.cmdRead()
 		cpu.setZN8(cpu.RAl)
 	} else {
-		cpu.RA = cpu.cmdRead16(info)
+		cpu.RA = cpu.cmdRead16()
 		cpu.setZN16(cpu.RA)
 	}
 }
 
 // LDX - Load X Register
-func (cpu *CPU) op_ldx(info stepInfo) {
+func (cpu *CPU) op_ldx() {
 	if cpu.X == 1 {
-		cpu.RXl = cpu.cmdRead(info)
+		cpu.RXl = cpu.cmdRead()
 		cpu.setZN8(cpu.RXl)
 	} else {
-		cpu.RX = cpu.cmdRead16(info)
+		cpu.RX = cpu.cmdRead16()
 		cpu.setZN16(cpu.RX)
 	}
 }
 
 // LDY - Load Y Register
-func (cpu *CPU) op_ldy(info stepInfo) {
+func (cpu *CPU) op_ldy() {
 	if cpu.X == 1 {
-		cpu.RYl = cpu.cmdRead(info)
+		cpu.RYl = cpu.cmdRead()
 		cpu.setZN8(cpu.RYl)
 	} else {
-		cpu.RY = cpu.cmdRead16(info)
+		cpu.RY = cpu.cmdRead16()
 		cpu.setZN16(cpu.RY)
 	}
 }
 
 // LSR - Logical Shift Right
-func (cpu *CPU) op_lsr(info stepInfo) {
-	if info.mode == m_Accumulator {
+func (cpu *CPU) op_lsr() {
+	if cpu.info.mode == m_Accumulator {
 		if cpu.M == 1 {
 			cpu.C = cpu.RAl & 1
 			cpu.RAl >>= 1
@@ -1629,38 +1630,38 @@ func (cpu *CPU) op_lsr(info stepInfo) {
 		}
 	} else {
 		if cpu.M == 1 {
-			value := cpu.cmdRead(info)
+			value := cpu.cmdRead()
 			cpu.C = value & 1
 			value >>= 1
-			cpu.cmdWrite(info, value)
+			cpu.cmdWrite(value)
 			cpu.setZN8(value)
 		} else {
-			value := cpu.cmdRead16(info)
+			value := cpu.cmdRead16()
 			cpu.C = byte(value & 1)
 			value >>= 1
-			cpu.cmdWrite16(info, value)
+			cpu.cmdWrite16(value)
 			cpu.setZN16(value)
 		}
 	}
 }
 
 // NOP - No Operation
-func (cpu *CPU) op_nop(info stepInfo) {
+func (cpu *CPU) op_nop() {
 }
 
 // ORA - Logical Inclusive OR
-func (cpu *CPU) op_ora(info stepInfo) {
+func (cpu *CPU) op_ora() {
 	if cpu.M == 1 {
-		cpu.RAl = cpu.RAl | cpu.cmdRead(info)
+		cpu.RAl = cpu.RAl | cpu.cmdRead()
 		cpu.setZN8(cpu.RAl)
 	} else {
-		cpu.RA = cpu.RA | cpu.cmdRead16(info)
+		cpu.RA = cpu.RA | cpu.cmdRead16()
 		cpu.setZN16(cpu.RA)
 	}
 }
 
 // PHA - Push Accumulator
-func (cpu *CPU) op_pha(info stepInfo) {
+func (cpu *CPU) op_pha() {
 	if cpu.M == 1 {
 		cpu.push(cpu.RAl)
 	} else {
@@ -1669,13 +1670,13 @@ func (cpu *CPU) op_pha(info stepInfo) {
 }
 
 // PHP - Push Processor Status
-func (cpu *CPU) op_php(info stepInfo) {
+func (cpu *CPU) op_php() {
 	//cpu.push(cpu.Flags() | 0x10)
 	cpu.push(cpu.Flags())
 }
 
 // PHX - PusH X Register
-func (cpu *CPU) op_phx(info stepInfo) {
+func (cpu *CPU) op_phx() {
 	if cpu.X == 1 {
 		cpu.push(cpu.RXl)
 	} else {
@@ -1684,7 +1685,7 @@ func (cpu *CPU) op_phx(info stepInfo) {
 }
 
 // PHY - PusH Y Register
-func (cpu *CPU) op_phy(info stepInfo) {
+func (cpu *CPU) op_phy() {
 	if cpu.X == 1 {
 		cpu.push(cpu.RYl)
 	} else {
@@ -1693,7 +1694,7 @@ func (cpu *CPU) op_phy(info stepInfo) {
 }
 
 // PLA - Pull Accumulator
-func (cpu *CPU) op_pla(info stepInfo) {
+func (cpu *CPU) op_pla() {
 	if cpu.M == 1 {
 		cpu.RAl = cpu.pull()
 		cpu.setZN8(cpu.RAl)
@@ -1704,15 +1705,15 @@ func (cpu *CPU) op_pla(info stepInfo) {
 }
 
 // PLP - Pull Processor Status
-func (cpu *CPU) op_plp(info stepInfo) {
+func (cpu *CPU) op_plp() {
 	//cpu.SetFlags(cpu.pull()&0xEF | 0x20)
 	cpu.SetFlags(cpu.pull())
 }
 
 // ROL - Rotate Left
-func (cpu *CPU) op_rol(info stepInfo) {
+func (cpu *CPU) op_rol() {
 	c := cpu.C
-	if info.mode == m_Accumulator {
+	if cpu.info.mode == m_Accumulator {
 		if cpu.M == 1 {
 			cpu.C = (cpu.RAl >> 7) & 1
 			cpu.RAl = (cpu.RAl << 1) | c
@@ -1724,25 +1725,25 @@ func (cpu *CPU) op_rol(info stepInfo) {
 		}
 	} else {
 		if cpu.M == 1 {
-			value := cpu.cmdRead(info)
+			value := cpu.cmdRead()
 			cpu.C = (value >> 7) & 1
 			value = (value << 1) | c
-			cpu.cmdWrite(info, value)
+			cpu.cmdWrite(value)
 			cpu.setZN8(value)
 		} else {
-			value := cpu.cmdRead16(info)
+			value := cpu.cmdRead16()
 			cpu.C = byte(value>>15) & 1
 			value = (value << 1) | uint16(c)
-			cpu.cmdWrite16(info, value)
+			cpu.cmdWrite16(value)
 			cpu.setZN16(value)
 		}
 	}
 }
 
 // ROR - Rotate Right
-func (cpu *CPU) op_ror(info stepInfo) {
+func (cpu *CPU) op_ror() {
 	c := cpu.C
-	if info.mode == m_Accumulator {
+	if cpu.info.mode == m_Accumulator {
 		if cpu.M == 1 {
 			cpu.C = cpu.RAl & 1
 			cpu.RAl = (cpu.RAl >> 1) | (c << 7)
@@ -1754,23 +1755,23 @@ func (cpu *CPU) op_ror(info stepInfo) {
 		}
 	} else {
 		if cpu.M == 1 {
-			value := cpu.cmdRead(info)
+			value := cpu.cmdRead()
 			cpu.C = value & 1
 			value = (value >> 1) | (c << 7)
-			cpu.cmdWrite(info, value)
+			cpu.cmdWrite(value)
 			cpu.setZN8(value)
 		} else {
-			value := cpu.cmdRead16(info)
+			value := cpu.cmdRead16()
 			cpu.C = byte(value & 1)
 			value = (value >> 1) | (uint16(c) << 15)
-			cpu.cmdWrite16(info, value)
+			cpu.cmdWrite16(value)
 			cpu.setZN16(value)
 		}
 	}
 }
 
 // RTI - Return from Interrupt
-func (cpu *CPU) op_rti(info stepInfo) {
+func (cpu *CPU) op_rti() {
 	//log.Println("cpu: rti")
 	//cpu.SetFlags(cpu.pull()&0xEF | 0x20)
 	if cpu.E == 1 {
@@ -1787,24 +1788,24 @@ func (cpu *CPU) op_rti(info stepInfo) {
 }
 
 // RLK - ReTurn from subroutine Long
-func (cpu *CPU) op_rtl(info stepInfo) {
+func (cpu *CPU) op_rtl() {
 	cpu.PC = cpu.pull16() + 1
 	cpu.RK = cpu.pull()
 	cpu.stepPC = 0
 }
 
 // RTS - Return from Subroutine
-func (cpu *CPU) op_rts(info stepInfo) {
+func (cpu *CPU) op_rts() {
 	cpu.PC = cpu.pull16() + 1
 	cpu.stepPC = 0
 }
 
 // SBC - SuBstract with Carry
 // I'm not sure what I'm doing ;)
-func (cpu *CPU) op_sbc(info stepInfo) {
+func (cpu *CPU) op_sbc() {
 	if cpu.M == 1 {
 		a := uint16(cpu.RAl)
-		d := uint16(^cpu.cmdRead(info))
+		d := uint16(^cpu.cmdRead())
 		c := uint16(cpu.C)
 		sum := a + d + c
 
@@ -1834,7 +1835,7 @@ func (cpu *CPU) op_sbc(info stepInfo) {
 		cpu.setZN8(cpu.RAl)
 	} else {
 		a := uint32(cpu.RA)
-		d := uint32(^cpu.cmdRead16(info))
+		d := uint32(^cpu.cmdRead16())
 		c := uint32(cpu.C)
 		sum := a + d + c
 
@@ -1872,9 +1873,9 @@ func (cpu *CPU) op_sbc(info stepInfo) {
 
 /*
 // SBC - Subtract with Carry
-func (cpu *CPU) sbc(info stepInfo) {
+func (cpu *CPU) sbc() {
 	a := cpu.RA
-	b := cpu.Read(info.address)
+	b := cpu.Read(cpu.info.address)
 	c := cpu.C
 	cpu.RA = a - b - (1 - c)
 	cpu.setZN(cpu.RA)
@@ -1892,49 +1893,49 @@ func (cpu *CPU) sbc(info stepInfo) {
 */
 
 // SEC - Set Carry Flag
-func (cpu *CPU) op_sec(info stepInfo) {
+func (cpu *CPU) op_sec() {
 	cpu.C = 1
 }
 
 // SED - Set Decimal Flag
-func (cpu *CPU) op_sed(info stepInfo) {
+func (cpu *CPU) op_sed() {
 	cpu.D = 1
 }
 
 // SEI - Set Interrupt Disable
-func (cpu *CPU) op_sei(info stepInfo) {
+func (cpu *CPU) op_sei() {
 	cpu.I = 1
 }
 
 // STA - Store Accumulator
-func (cpu *CPU) op_sta(info stepInfo) {
+func (cpu *CPU) op_sta() {
 	if cpu.M == 1 {
-		cpu.cmdWrite(info, cpu.RAl)
+		cpu.cmdWrite(cpu.RAl)
 	} else {
-		cpu.cmdWrite16(info, cpu.RA)
+		cpu.cmdWrite16(cpu.RA)
 	}
 }
 
 // STX - Store X Register
-func (cpu *CPU) op_stx(info stepInfo) {
+func (cpu *CPU) op_stx() {
 	if cpu.X == 1 {
-		cpu.cmdWrite(info, cpu.RXl)
+		cpu.cmdWrite(cpu.RXl)
 	} else {
-		cpu.cmdWrite16(info, cpu.RX)
+		cpu.cmdWrite16(cpu.RX)
 	}
 }
 
 // STY - Store Y Register
-func (cpu *CPU) op_sty(info stepInfo) {
+func (cpu *CPU) op_sty() {
 	if cpu.X == 1 {
-		cpu.cmdWrite(info, cpu.RYl)
+		cpu.cmdWrite(cpu.RYl)
 	} else {
-		cpu.cmdWrite16(info, cpu.RY)
+		cpu.cmdWrite16(cpu.RY)
 	}
 }
 
 // TAX - Transfer Accumulator to X
-func (cpu *CPU) op_tax(info stepInfo) {
+func (cpu *CPU) op_tax() {
 	var src uint16
 	if cpu.M == 1 {
 		src = uint16(cpu.RAl)
@@ -1952,7 +1953,7 @@ func (cpu *CPU) op_tax(info stepInfo) {
 }
 
 // TAY - Transfer Accumulator to Y
-func (cpu *CPU) op_tay(info stepInfo) {
+func (cpu *CPU) op_tay() {
 	var src uint16
 	if cpu.M == 1 {
 		src = uint16(cpu.RAl)
@@ -1970,7 +1971,7 @@ func (cpu *CPU) op_tay(info stepInfo) {
 }
 
 // TSX - Transfer Stack Pointer to X
-func (cpu *CPU) op_tsx(info stepInfo) {
+func (cpu *CPU) op_tsx() {
 	if cpu.X == 1 {
 		cpu.RXl = byte(cpu.SP & 0x00ff)
 		cpu.setZN8(cpu.RXl)
@@ -1981,7 +1982,7 @@ func (cpu *CPU) op_tsx(info stepInfo) {
 }
 
 // TXA - Transfer X to Accumulator
-func (cpu *CPU) op_txa(info stepInfo) {
+func (cpu *CPU) op_txa() {
 	var src uint16
 	if cpu.X == 1 {
 		src = uint16(cpu.RXl)
@@ -1999,7 +2000,7 @@ func (cpu *CPU) op_txa(info stepInfo) {
 }
 
 // TXS - Transfer X to Stack Pointer
-func (cpu *CPU) op_txs(info stepInfo) {
+func (cpu *CPU) op_txs() {
 	var src uint16
 	if cpu.X == 1 {
 		src = uint16(cpu.RXl)
@@ -2015,7 +2016,7 @@ func (cpu *CPU) op_txs(info stepInfo) {
 }
 
 // TYA - Transfer Y to Accumulator
-func (cpu *CPU) op_tya(info stepInfo) {
+func (cpu *CPU) op_tya() {
 	var src uint16
 	if cpu.X == 1 {
 		src = uint16(cpu.RYl)
@@ -2033,20 +2034,20 @@ func (cpu *CPU) op_tya(info stepInfo) {
 }
 
 // BRA - BRanch Always
-func (cpu *CPU) op_bra(info stepInfo) {
-	cpu.addBranchCycles(info) // always before PC change!
-	cpu.PC = info.addr
+func (cpu *CPU) op_bra() {
+	cpu.addBranchCycles() // always before PC change!
+	cpu.PC = cpu.info.addr
 	cpu.stepPC = 0
 }
 
 // BRL - BRanch Long
-func (cpu *CPU) op_brl(info stepInfo) {
-	cpu.PC = info.addr
+func (cpu *CPU) op_brl() {
+	cpu.PC = cpu.info.addr
 	cpu.stepPC = 0
 }
 
 // COP - COProcessor
-func (cpu *CPU) op_cop(info stepInfo) {
+func (cpu *CPU) op_cop() {
 	if cpu.E == 1 {
 		cpu.push16(cpu.PC + 2)
 		cpu.push(cpu.Flags())
@@ -2090,9 +2091,9 @@ accumulator means six bytes will be moved.
   BTW: specification says that mvn/mvp use full C accumulator
 
 */
-func (cpu *CPU) op_mvn(info stepInfo) {
-	dst := cpu.nRead(cpu.RK, info.addr)
-	src := cpu.nRead(cpu.RK, info.addr+1)
+func (cpu *CPU) op_mvn() {
+	dst := cpu.nRead(cpu.RK, cpu.info.addr)
+	src := cpu.nRead(cpu.RK, cpu.info.addr+1)
 
 	cpu.RDBR = dst
 	if cpu.X == 1 {
@@ -2114,9 +2115,9 @@ func (cpu *CPU) op_mvn(info stepInfo) {
 }
 
 // MVP - MoVe memory Positive
-func (cpu *CPU) op_mvp(info stepInfo) {
-	dst := cpu.nRead(cpu.RK, info.addr)
-	src := cpu.nRead(cpu.RK, info.addr+1)
+func (cpu *CPU) op_mvp() {
+	dst := cpu.nRead(cpu.RK, cpu.info.addr)
+	src := cpu.nRead(cpu.RK, cpu.info.addr+1)
 
 	cpu.RDBR = dst
 	if cpu.X == 1 {
@@ -2138,22 +2139,22 @@ func (cpu *CPU) op_mvp(info stepInfo) {
 }
 
 // PHB - PusH data Bank register
-func (cpu *CPU) op_phb(info stepInfo) {
+func (cpu *CPU) op_phb() {
 	cpu.push(cpu.RDBR)
 }
 
 // PHD - PusH Direct register
-func (cpu *CPU) op_phd(info stepInfo) {
+func (cpu *CPU) op_phd() {
 	cpu.push16(cpu.RD)
 }
 
 // PHK - PusH K register
-func (cpu *CPU) op_phk(info stepInfo) {
+func (cpu *CPU) op_phk() {
 	cpu.push(cpu.RK)
 }
 
 // PLX - PulL X Register
-func (cpu *CPU) op_plx(info stepInfo) {
+func (cpu *CPU) op_plx() {
 	if cpu.X == 1 {
 		cpu.RXl = cpu.pull()
 		cpu.setZN8(cpu.RXl)
@@ -2164,7 +2165,7 @@ func (cpu *CPU) op_plx(info stepInfo) {
 }
 
 // PLY - PulL Y Register
-func (cpu *CPU) op_ply(info stepInfo) {
+func (cpu *CPU) op_ply() {
 	if cpu.X == 1 {
 		cpu.RYl = cpu.pull()
 		cpu.setZN8(cpu.RYl)
@@ -2175,63 +2176,63 @@ func (cpu *CPU) op_ply(info stepInfo) {
 }
 
 // PEA - Push Effective Address
-func (cpu *CPU) op_pea(info stepInfo) {
-	cpu.push16(cpu.cmdRead16(info))
-	//val := cpu.cmdRead16(info)
-	//fmt.Fprintf(&cpu.LogBuf, "PEA %04x %04x\n", val, info.addr)
+func (cpu *CPU) op_pea() {
+	cpu.push16(cpu.cmdRead16())
+	//val := cpu.cmdRead16()
+	//fmt.Fprintf(&cpu.LogBuf, "PEA %04x %04x\n", val, cpu.info.addr)
 }
 
 // PLD - PulL Direct register
-func (cpu *CPU) op_pld(info stepInfo) {
+func (cpu *CPU) op_pld() {
 	cpu.RD = cpu.pull16()
 	cpu.setZN16(cpu.RD)
 }
 
 // PER - Push Effective Relative address
-func (cpu *CPU) op_per(info stepInfo) {
-	cpu.push16(info.addr)
+func (cpu *CPU) op_per() {
+	cpu.push16(cpu.info.addr)
 }
 
 // PEI - Push Effective Indirect address
-func (cpu *CPU) op_pei(info stepInfo) {
-	cpu.push16(cpu.cmdRead16(info))
+func (cpu *CPU) op_pei() {
+	cpu.push16(cpu.cmdRead16())
 }
 
 // PLB - PulL data Bank register
-func (cpu *CPU) op_plb(info stepInfo) {
+func (cpu *CPU) op_plb() {
 	cpu.RDBR = cpu.pull()
 	cpu.setZN8(cpu.RDBR)
 }
 
 // REset Processor status bits
-func (cpu *CPU) op_rep(info stepInfo) {
-	neg_flags := ^cpu.Bus.EaRead(info.ea)
+func (cpu *CPU) op_rep() {
+	neg_flags := ^cpu.Bus.EaRead(cpu.info.ea)
 	tmp_flags := cpu.Flags() & neg_flags
-	//fmt.Fprintf(&cpu.LogBuf, "op_rep %08b %08b %08b %08b\n", cpu.Bus.EaRead(info.ea), neg_flags, cpu.Flags(), tmp_flags)
+	//fmt.Fprintf(&cpu.LogBuf, "op_rep %08b %08b %08b %08b\n", cpu.Bus.EaRead(cpu.info.ea), neg_flags, cpu.Flags(), tmp_flags)
 	cpu.SetFlags(tmp_flags)
 }
 
 // SEt Processor status bits
-func (cpu *CPU) op_sep(info stepInfo) {
-	tmp_flags := cpu.Flags() | cpu.Bus.EaRead(info.ea)
+func (cpu *CPU) op_sep() {
+	tmp_flags := cpu.Flags() | cpu.Bus.EaRead(cpu.info.ea)
 	cpu.SetFlags(tmp_flags)
 }
 
 // STP - SToP the clock
-func (cpu *CPU) stp(info stepInfo) {
+func (cpu *CPU) stp() {
 }
 
 // STZ - STore Zero
-func (cpu *CPU) op_stz(info stepInfo) {
+func (cpu *CPU) op_stz() {
 	if cpu.M == 1 {
-		cpu.cmdWrite(info, 0x00)
+		cpu.cmdWrite(0x00)
 	} else {
-		cpu.cmdWrite16(info, 0x0000)
+		cpu.cmdWrite16(0x0000)
 	}
 }
 
 // TCD - Transfer C accumulator to Direct register
-func (cpu *CPU) op_tcd(info stepInfo) {
+func (cpu *CPU) op_tcd() {
 	if cpu.M == 1 {
 		cpu.RD = (uint16(cpu.RAh) << 8) | uint16(cpu.RAl)
 	} else {
@@ -2241,7 +2242,7 @@ func (cpu *CPU) op_tcd(info stepInfo) {
 }
 
 // TCS - Transfer C accumulator to Stack pointer
-func (cpu *CPU) op_tcs(info stepInfo) {
+func (cpu *CPU) op_tcs() {
 	var src uint16
 	if cpu.M == 1 {
 		src = (uint16(cpu.RAh) << 8) | uint16(cpu.RAl)
@@ -2257,7 +2258,7 @@ func (cpu *CPU) op_tcs(info stepInfo) {
 }
 
 // TCD - Transfer Direct register to C accumulator
-func (cpu *CPU) op_tdc(info stepInfo) {
+func (cpu *CPU) op_tdc() {
 	if cpu.M == 1 {
 		cpu.RAh = byte(cpu.RD >> 8)
 		cpu.RAl = byte(cpu.RD)
@@ -2268,33 +2269,33 @@ func (cpu *CPU) op_tdc(info stepInfo) {
 }
 
 // Test and Reset Bits
-func (cpu *CPU) op_trb(info stepInfo) {
+func (cpu *CPU) op_trb() {
 	if cpu.M == 1 {
-		value := cpu.cmdRead(info)
-		cpu.cmdWrite(info, value&(^cpu.RAl))
+		value := cpu.cmdRead()
+		cpu.cmdWrite(value & (^cpu.RAl))
 		cpu.setZN8(value & cpu.RAl)
 	} else {
-		value := cpu.cmdRead16(info)
-		cpu.cmdWrite16(info, value&(^cpu.RA))
+		value := cpu.cmdRead16()
+		cpu.cmdWrite16(value & (^cpu.RA))
 		cpu.setZN16(value & cpu.RA)
 	}
 }
 
 // Test and Set Bits
-func (cpu *CPU) op_tsb(info stepInfo) {
+func (cpu *CPU) op_tsb() {
 	if cpu.M == 1 {
-		value := cpu.cmdRead(info)
-		cpu.cmdWrite(info, value|cpu.RAl)
+		value := cpu.cmdRead()
+		cpu.cmdWrite(value | cpu.RAl)
 		cpu.setZN8(value & cpu.RAl)
 	} else {
-		value := cpu.cmdRead16(info)
-		cpu.cmdWrite16(info, value|cpu.RA)
+		value := cpu.cmdRead16()
+		cpu.cmdWrite16(value | cpu.RA)
 		cpu.setZN16(value & cpu.RA)
 	}
 }
 
 // TSC - Transfer Stack pointer to C accumulator
-func (cpu *CPU) op_tsc(info stepInfo) {
+func (cpu *CPU) op_tsc() {
 	if cpu.M == 1 {
 		cpu.RAh = byte(cpu.SP >> 8)
 		cpu.RAl = byte(cpu.SP)
@@ -2305,7 +2306,7 @@ func (cpu *CPU) op_tsc(info stepInfo) {
 }
 
 // TXY - Transfer X register to Y register
-func (cpu *CPU) op_txy(info stepInfo) {
+func (cpu *CPU) op_txy() {
 	if cpu.X == 1 {
 		cpu.RYl = cpu.RXl
 		cpu.setZN8(cpu.RYl)
@@ -2316,7 +2317,7 @@ func (cpu *CPU) op_txy(info stepInfo) {
 }
 
 // TYX - Transfer Y register to X register
-func (cpu *CPU) op_tyx(info stepInfo) {
+func (cpu *CPU) op_tyx() {
 	if cpu.X == 1 {
 		cpu.RXl = cpu.RYl
 		cpu.setZN8(cpu.RXl)
@@ -2327,15 +2328,15 @@ func (cpu *CPU) op_tyx(info stepInfo) {
 }
 
 // WAI - WAit for Interrupt
-func (cpu *CPU) wai(info stepInfo) {
+func (cpu *CPU) wai() {
 }
 
 // WDM - William D. Mensch, Jr.
 //
 // values: 0-9  increase counter
 //         >=10 are interpreted by emulator
-func (cpu *CPU) op_wdm(info stepInfo) {
-	cpu.WDM = cpu.cmdRead(info)
+func (cpu *CPU) op_wdm() {
+	cpu.WDM = cpu.cmdRead()
 	switch {
 	case cpu.WDM == 0:
 		cpu.Counter = 0
@@ -2347,7 +2348,7 @@ func (cpu *CPU) op_wdm(info stepInfo) {
 }
 
 // XBA - eXchange B and A accumulator
-func (cpu *CPU) op_xba(info stepInfo) {
+func (cpu *CPU) op_xba() {
 	if cpu.M == 1 {
 		cpu.RAh, cpu.RAl = cpu.RAl, cpu.RAh
 		cpu.setZN8(cpu.RAl)
@@ -2360,7 +2361,7 @@ func (cpu *CPU) op_xba(info stepInfo) {
 }
 
 // XCE - eXchange Carry and Emulation flags
-func (cpu *CPU) op_xce(info stepInfo) {
+func (cpu *CPU) op_xce() {
 	if cpu.C == cpu.E {
 		return
 	}
@@ -2376,6 +2377,6 @@ func (cpu *CPU) op_xce(info stepInfo) {
 }
 
 // unknown opcode - XXX - todo PANIC?
-func (cpu *CPU) op_xxx(info stepInfo) {
+func (cpu *CPU) op_xxx() {
 	log.Fatalf("unknown instruction %02x at $%04x", cpu.nRead(cpu.RK, cpu.PC), cpu.PC)
 }
