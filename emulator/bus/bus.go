@@ -93,18 +93,6 @@ func (b *Bus) Attach(mem memory.Memory, name string, start uint32, end uint32) e
 	return nil
 }
 
-// XXX - crudy hack
-func (b *Bus) backendFor(a uint32) (memory.Memory, error) {
-	var tmpmem memory.Memory = nil
-	tmpmem = b.segment[a>>4]
-	if tmpmem == nil {
-		//fmt.Printf("%v", b.segment)
-		return nil, fmt.Errorf("No backend for address 0x%06X index %06x", a, a>>4)
-	} else {
-		return tmpmem, nil
-	}
-}
-
 // Shutdown tells the address bus a shutdown is occurring, and to pass the
 // message on to subordinates.
 func (b *Bus) Shutdown() {
@@ -117,9 +105,9 @@ func (b *Bus) Shutdown() {
 // e.g. if ROM is mapped to 0xC000, then Read(0xC0FF) returns the byte at
 // 0x00FF in that RAM device.
 func (b *Bus) EaRead(a uint32) byte {
-	mem, err := b.backendFor(a)
-	if err != nil {
-		panic(err) // XXX should log instead and abort of execution, but unwind tooks too many levels now :-/
+	mem := b.segment[a>>4]
+	if mem == nil {
+		panic(fmt.Errorf("No backend for address 0x%06X index %06x", a, a>>4))
 	}
 	b.EA = a // for debug interface
 	b.Write = false
@@ -129,9 +117,9 @@ func (b *Bus) EaRead(a uint32) byte {
 
 // Write the byte to the device mapped to the given address.
 func (b *Bus) EaWrite(a uint32, value byte) {
-	mem, err := b.backendFor(a)
-	if err != nil {
-		panic(err)
+	mem := b.segment[a>>4]
+	if mem == nil {
+		panic(fmt.Errorf("No backend for address 0x%06X index %06x", a, a>>4))
 	}
 	b.EA = a // for debug interface
 	b.Write = true
@@ -143,9 +131,11 @@ func (b *Bus) EaWrite(a uint32, value byte) {
 func (b *Bus) EaDump(a uint32) (uint32, []byte) {
 	a = a & 0x00fffff0 // round to segment
 	start := a
-	mem, err := b.backendFor(a)
-	if err != nil {
+
+	mem := b.segment[a>>4]
+	if mem == nil {
 		return start, nil
 	}
+
 	return start, mem.Dump(start)
 }
