@@ -115,6 +115,29 @@ func (b *Bus) EaRead(a uint32) byte {
 	return value
 }
 
+func (b *Bus) EaRead24_wrap(bank byte, addr uint16) uint32 {
+	bank32 := uint32(bank) << 16
+	offs := uint32(addr)
+
+	m0 := b.segment[(bank32|offs+0)>>4]
+	m1 := b.segment[(bank32|offs+1)>>4]
+	m2 := b.segment[(bank32|offs+2)>>4]
+	if m0 == nil || m1 == nil || m2 == nil {
+		a := bank32 | (offs + 0)
+		panic(fmt.Errorf("No backend for address 0x%06X index %06x", a, a>>4))
+	}
+
+	b.Write = false
+	b.EA = bank32 | (offs + 0) // for debug interface
+	ll := m0.Read(b.EA)
+	b.EA = bank32 | (offs + 1)
+	mm := m1.Read(b.EA)
+	b.EA = bank32 | (offs + 2)
+	hh := m2.Read(b.EA)
+
+	return uint32(hh)<<16 | uint32(mm)<<8 | uint32(ll)
+}
+
 // Write the byte to the device mapped to the given address.
 func (b *Bus) EaWrite(a uint32, value byte) {
 	mem := b.segment[a>>4]

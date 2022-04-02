@@ -483,12 +483,16 @@ func (cpu *CPU) nRead16_wrap(bank byte, addr uint16) uint16 {
 	return uint16(hh)<<8 | uint16(ll)
 }
 
+//func (cpu *CPU) nRead24_wrap(bank byte, addr uint16) uint32 {
+//	bank32 := uint32(bank) << 16
+//	ll := cpu.Bus.EaRead(bank32 | uint32(addr))
+//	mm := cpu.Bus.EaRead(bank32 | uint32(addr+1))
+//	hh := cpu.Bus.EaRead(bank32 | uint32(addr+2))
+//	return uint32(hh)<<16 | uint32(mm)<<8 | uint32(ll)
+//}
+
 func (cpu *CPU) nRead24_wrap(bank byte, addr uint16) uint32 {
-	bank32 := uint32(bank) << 16
-	ll := cpu.Bus.EaRead(bank32 | uint32(addr))
-	mm := cpu.Bus.EaRead(bank32 | uint32(addr+1))
-	hh := cpu.Bus.EaRead(bank32 | uint32(addr+2))
-	return uint32(hh)<<16 | uint32(mm)<<8 | uint32(ll)
+	return cpu.Bus.EaRead24_wrap(bank, addr)
 }
 
 func (cpu *CPU) nRead16_cross(bank byte, addr uint16) uint16 {
