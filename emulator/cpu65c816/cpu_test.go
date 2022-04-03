@@ -2,6 +2,7 @@ package cpu65c816
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"github.com/alttpo/snes/emulator/bus"
 	"github.com/alttpo/snes/emulator/memory"
@@ -14,9 +15,9 @@ func TestCPU_Step(t *testing.T) {
 		//"SNES/CPUTest/CPU/BRA/CPUBRA.sfc",
 		//"SNES/CPUTest/CPU/ROR/CPUROR.sfc",
 		//"SNES/CPUTest/CPU/CMP/CPUCMP.sfc",
-		"SNES/CPUTest/CPU/RET/CPURET.sfc",
+		//"SNES/CPUTest/CPU/RET/CPURET.sfc",
 		//"SNES/CPUTest/CPU/INC/CPUINC.sfc",
-		//"SNES/CPUTest/CPU/TRN/CPUTRN.sfc",
+		"SNES/CPUTest/CPU/TRN/CPUTRN.sfc",
 		//"SNES/CPUTest/CPU/SBC/CPUSBC.sfc",
 		//"SNES/CPUTest/CPU/BIT/CPUBIT.sfc",
 		//"SNES/CPUTest/CPU/ASL/CPUASL.sfc",
@@ -77,8 +78,8 @@ func TestCPU_Step(t *testing.T) {
 
 			s.CPU.Reset()
 			for s.CPU.AllCycles < 0x1000_0000 {
-				//s.CPU.DisassembleCurrentPC(os.Stdout)
-				//fmt.Println()
+				//s.CPU.DisassembleCurrentPC(os.Stderr)
+				//fmt.Fprintln(os.Stderr)
 				s.CPU.Step()
 				if s.CPU.PC == s.CPU.PPC {
 					break
@@ -87,6 +88,7 @@ func TestCPU_Step(t *testing.T) {
 			fmt.Println()
 			mmio.printScreen()
 
+			fmt.Print(hex.Dump(s.WRAM[0:0x100]))
 			if mmio.fail {
 				t.FailNow()
 			}
