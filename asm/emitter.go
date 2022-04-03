@@ -724,6 +724,13 @@ func (a *Emitter) LDY_abs(offs uint16) {
 	a.emit3("ldy.w", "$%02[2]x%02[1]x", d)
 }
 
+func (a *Emitter) STZ_dp(offs uint8) {
+	var d [2]byte
+	d[0] = 0x64
+	d[1] = offs
+	a.emit2("stz.b", "$%02[1]x", d)
+}
+
 func (a *Emitter) STZ_abs(offs uint16) {
 	var d [3]byte
 	d[0] = 0x9C
@@ -745,6 +752,13 @@ func (a *Emitter) INC_dp(addr uint8) {
 	a.emit2("inc.b", "$%02[1]x", d)
 }
 
+func (a *Emitter) INC_abs(offs uint16) {
+	var d [3]byte
+	d[0] = 0xE6
+	d[1], d[2] = imm16(offs)
+	a.emit3("inc.w", "$%02[2]x%02[1]x", d)
+}
+
 func (a *Emitter) LDA_dp(addr uint8) {
 	var d [2]byte
 	d[0] = 0xA5
@@ -760,6 +774,20 @@ func (a *Emitter) LDX_imm8_b(m uint8) {
 	d[0] = 0xA2
 	d[1] = m
 	a.emit2("ldx.b", "#$%02x", d)
+}
+
+func (a *Emitter) LDX_abs(offs uint16) {
+	var d [3]byte
+	d[0] = 0xAE
+	d[1], d[2] = imm16(offs)
+	a.emit3("ldx.w", "$%02[2]x%02[1]x", d)
+}
+
+func (a *Emitter) STX_abs(offs uint16) {
+	var d [3]byte
+	d[0] = 0x8E
+	d[1], d[2] = imm16(offs)
+	a.emit3("stx.w", "$%02[2]x%02[1]x", d)
 }
 
 func (a *Emitter) DEX() {
@@ -868,4 +896,13 @@ func (a *Emitter) XBA() {
 
 func (a *Emitter) SEI() {
 	a.emit1("sei", [1]byte{0x78})
+}
+
+// WDM triggers a CPU abort
+func (a *Emitter) WDM(m uint8) {
+	a.emit2("wdm", "#$%02x", [2]byte{0x42, m})
+}
+
+func (a *Emitter) CLC() {
+	a.emit1("clc", [1]byte{0x18})
 }
