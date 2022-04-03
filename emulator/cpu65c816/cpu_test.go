@@ -12,29 +12,29 @@ import (
 
 func TestCPU_Step(t *testing.T) {
 	roms := []string{
-		//"SNES/CPUTest/CPU/BRA/CPUBRA.sfc",
-		//"SNES/CPUTest/CPU/ROR/CPUROR.sfc",
-		//"SNES/CPUTest/CPU/CMP/CPUCMP.sfc",
-		//"SNES/CPUTest/CPU/RET/CPURET.sfc",
-		//"SNES/CPUTest/CPU/INC/CPUINC.sfc",
-		//"SNES/CPUTest/CPU/TRN/CPUTRN.sfc",
-		//"SNES/CPUTest/CPU/SBC/CPUSBC.sfc", // BCD fails; move on with life.
+		"SNES/CPUTest/CPU/BRA/CPUBRA.sfc",
+		"SNES/CPUTest/CPU/ROR/CPUROR.sfc",
+		"SNES/CPUTest/CPU/CMP/CPUCMP.sfc",
+		"SNES/CPUTest/CPU/RET/CPURET.sfc",
+		"SNES/CPUTest/CPU/INC/CPUINC.sfc",
+		"SNES/CPUTest/CPU/TRN/CPUTRN.sfc",
+		"SNES/CPUTest/CPU/SBC/CPUSBC.sfc", // BCD fails; move on with life.
 		"SNES/CPUTest/CPU/BIT/CPUBIT.sfc",
-		//"SNES/CPUTest/CPU/ASL/CPUASL.sfc",
-		//"SNES/CPUTest/CPU/LDR/CPULDR.sfc",
-		//"SNES/CPUTest/CPU/ORA/CPUORA.sfc",
-		//"SNES/CPUTest/CPU/JMP/CPUJMP.sfc",
-		//"SNES/CPUTest/CPU/PHL/CPUPHL.sfc",
-		//"SNES/CPUTest/CPU/AND/CPUAND.sfc",
-		//"SNES/CPUTest/CPU/ROL/CPUROL.sfc",
-		//"SNES/CPUTest/CPU/ADC/CPUADC.sfc",
-		//"SNES/CPUTest/CPU/MSC/CPUMSC.sfc",
-		//"SNES/CPUTest/CPU/DEC/CPUDEC.sfc",
-		//"SNES/CPUTest/CPU/PSR/CPUPSR.sfc",
-		//"SNES/CPUTest/CPU/STR/CPUSTR.sfc",
-		//"SNES/CPUTest/CPU/LSR/CPULSR.sfc",
-		//"SNES/CPUTest/CPU/EOR/CPUEOR.sfc",
-		//"SNES/CPUTest/CPU/MOV/CPUMOV.sfc",
+		"SNES/CPUTest/CPU/ASL/CPUASL.sfc",
+		"SNES/CPUTest/CPU/LDR/CPULDR.sfc",
+		"SNES/CPUTest/CPU/ORA/CPUORA.sfc",
+		"SNES/CPUTest/CPU/JMP/CPUJMP.sfc",
+		"SNES/CPUTest/CPU/PHL/CPUPHL.sfc",
+		"SNES/CPUTest/CPU/AND/CPUAND.sfc",
+		"SNES/CPUTest/CPU/ROL/CPUROL.sfc",
+		"SNES/CPUTest/CPU/ADC/CPUADC.sfc", // BCD fails
+		"SNES/CPUTest/CPU/MSC/CPUMSC.sfc",
+		"SNES/CPUTest/CPU/DEC/CPUDEC.sfc",
+		"SNES/CPUTest/CPU/PSR/CPUPSR.sfc",
+		"SNES/CPUTest/CPU/STR/CPUSTR.sfc",
+		"SNES/CPUTest/CPU/LSR/CPULSR.sfc",
+		"SNES/CPUTest/CPU/EOR/CPUEOR.sfc",
+		"SNES/CPUTest/CPU/MOV/CPUMOV.sfc",
 	}
 	for _, romName := range roms {
 		t.Run(romName, func(t *testing.T) {
