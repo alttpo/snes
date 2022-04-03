@@ -77,9 +77,19 @@ func TestCPU_Step(t *testing.T) {
 
 			s.CPU.Reset()
 			for s.CPU.AllCycles < 0x1000_0000 {
+				//s.CPU.DisassembleCurrentPC(os.Stdout)
+				//fmt.Println()
 				s.CPU.Step()
+				if s.CPU.PC == s.CPU.PPC {
+					break
+				}
 			}
+			fmt.Println()
 			mmio.printScreen()
+
+			if mmio.fail {
+				t.FailNow()
+			}
 		})
 	}
 }
@@ -203,6 +213,8 @@ type testMMIO struct {
 	scr      [0x10000]byte
 	addr     uint16
 	scrWrote bool
+
+	fail bool
 }
 
 func (m *testMMIO) Read(address uint32) (value byte) {
@@ -274,14 +286,14 @@ func (m *testMMIO) Dump(address uint32) []byte {
 }
 
 func (m *testMMIO) printScreen() {
-	fail := false
-	failText := []byte("FAIL")
-	if bytes.Contains(m.scr[0x7C00:], failText) {
-		fail = true
+	if !m.fail {
+		failText := []byte("FAIL")
+		if bytes.Contains(m.scr[0x7C00:], failText) {
+			m.fail = true
+		}
 	}
 
 	if m.scrWrote {
-		fmt.Println("--------------------------------")
 		for y := 0; y < 32; y++ {
 			line := m.scr[0x7C00+y<<5 : 0x7C00+y<<5+32]
 			for x := 0; x < 32; x++ {
@@ -289,11 +301,8 @@ func (m *testMMIO) printScreen() {
 			}
 			fmt.Println()
 		}
+		fmt.Println("--------------------------------")
 
 		m.scrWrote = false
-	}
-
-	if fail {
-		m.t.FailNow()
 	}
 }
