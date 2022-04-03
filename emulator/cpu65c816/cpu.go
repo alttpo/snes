@@ -1782,7 +1782,7 @@ func (cpu *CPU) op_rti() {
 		cpu.PC = cpu.pull16()
 		cpu.RK = cpu.pull()
 	}
-	cpu.I = 0
+	//cpu.I = 0
 	cpu.stepPC = 0
 }
 
