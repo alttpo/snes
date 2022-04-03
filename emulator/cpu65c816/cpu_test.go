@@ -17,9 +17,9 @@ func TestCPU_Step(t *testing.T) {
 		//"SNES/CPUTest/CPU/CMP/CPUCMP.sfc",
 		//"SNES/CPUTest/CPU/RET/CPURET.sfc",
 		//"SNES/CPUTest/CPU/INC/CPUINC.sfc",
-		"SNES/CPUTest/CPU/TRN/CPUTRN.sfc",
-		//"SNES/CPUTest/CPU/SBC/CPUSBC.sfc",
-		//"SNES/CPUTest/CPU/BIT/CPUBIT.sfc",
+		//"SNES/CPUTest/CPU/TRN/CPUTRN.sfc",
+		//"SNES/CPUTest/CPU/SBC/CPUSBC.sfc", // BCD fails; move on with life.
+		"SNES/CPUTest/CPU/BIT/CPUBIT.sfc",
 		//"SNES/CPUTest/CPU/ASL/CPUASL.sfc",
 		//"SNES/CPUTest/CPU/LDR/CPULDR.sfc",
 		//"SNES/CPUTest/CPU/ORA/CPUORA.sfc",

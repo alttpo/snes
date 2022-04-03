@@ -2269,12 +2269,12 @@ func (cpu *CPU) op_tdc() {
 func (cpu *CPU) op_trb() {
 	if cpu.M == 1 {
 		value := cpu.cmdRead()
-		cpu.cmdWrite(value & (^cpu.RAl))
-		cpu.setZN8(value & cpu.RAl)
+		cpu.setZ8(value & cpu.RAl)
+		cpu.cmdWrite(value & ^cpu.RAl)
 	} else {
 		value := cpu.cmdRead16()
-		cpu.cmdWrite16(value & (^cpu.RA))
-		cpu.setZN16(value & cpu.RA)
+		cpu.setZ16(value & cpu.RA)
+		cpu.cmdWrite16(value & ^cpu.RA)
 	}
 }
 
@@ -2282,12 +2282,12 @@ func (cpu *CPU) op_trb() {
 func (cpu *CPU) op_tsb() {
 	if cpu.M == 1 {
 		value := cpu.cmdRead()
+		cpu.setZ8(value & cpu.RAl)
 		cpu.cmdWrite(value | cpu.RAl)
-		cpu.setZN8(value & cpu.RAl)
 	} else {
 		value := cpu.cmdRead16()
+		cpu.setZ16(value & cpu.RA)
 		cpu.cmdWrite16(value | cpu.RA)
-		cpu.setZN16(value & cpu.RA)
 	}
 }
 
