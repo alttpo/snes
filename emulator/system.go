@@ -98,7 +98,7 @@ func (s *System) CreateEmulator() (err error) {
 		}
 
 		// map in first $2000 of each bank as a mirror of WRAM:
-		for b := uint32(0); b < 0x70; b++ {
+		for b := uint32(0); b < 0x40; b++ {
 			bank := b << 16
 			err = s.Bus.Attach(
 				memory.NewRAM(s.WRAM[0:0x2000], bank),
@@ -110,7 +110,7 @@ func (s *System) CreateEmulator() (err error) {
 				return
 			}
 		}
-		for b := uint32(0x80); b < 0x100; b++ {
+		for b := uint32(0x80); b < 0xC0; b++ {
 			bank := b << 16
 			err = s.Bus.Attach(
 				memory.NewRAM(s.WRAM[0:0x2000], bank),
