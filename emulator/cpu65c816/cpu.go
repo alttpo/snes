@@ -1263,7 +1263,6 @@ func (cpu *CPU) op_beq() {
 }
 
 // BIT - test BITs
-// TODO: there is a mistake here, immediate mode should not set N nor V!
 
 /*
 OP LEN CYCLES      MODE      nvmxdizc e SYNTAX
@@ -1294,7 +1293,7 @@ func (cpu *CPU) op_bit() {
 		val := cpu.cmdRead()
 		cpu.setZ8(cpu.RAl & val)
 
-		if cpu.info.mode != m_Immediate {
+		if cpu.info.mode != m_Immediate_flagM {
 			cpu.setN8(val)
 			if val&0x40 != 0 {
 				cpu.V = 1
@@ -1307,7 +1306,7 @@ func (cpu *CPU) op_bit() {
 		val := cpu.cmdRead16()
 		cpu.setZ16(cpu.RA & val)
 
-		if cpu.info.mode != m_Immediate {
+		if cpu.info.mode != m_Immediate_flagM {
 			cpu.setN16(val)
 			if val&0x4000 != 0 {
 				cpu.V = 1
