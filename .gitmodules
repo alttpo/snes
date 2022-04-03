@@ -1,0 +1,3 @@
+[submodule "emulator/cpu65c816/SNES"]
+	path = emulator/cpu65c816/SNES
+	url = git@github.com:PeterLemon/SNES.git
