@@ -723,14 +723,11 @@ func (cpu *CPU) SetFlags(flags byte) {
 
 func (cpu *CPU) ChangeRegisterSizes_X() {
 	if cpu.X == 1 {
-		cpu.RX = cpu.RX & 0x00ff
 		cpu.RXl = uint8(cpu.RX)
-
-		cpu.RY = cpu.RY & 0x00ff
 		cpu.RYl = uint8(cpu.RY)
 	} else {
-		cpu.RX = uint16(cpu.RXl)
-		cpu.RY = uint16(cpu.RYl)
+		cpu.RX = cpu.RX&0xff00 | uint16(cpu.RXl)
+		cpu.RY = cpu.RY&0xff00 | uint16(cpu.RYl)
 	}
 }
 
@@ -1782,6 +1779,7 @@ func (cpu *CPU) op_rti() {
 		cpu.PC = cpu.pull16()
 		cpu.RK = cpu.pull()
 	}
+	// note(jsd): disabling this line passes the CPURET test
 	//cpu.I = 0
 	cpu.stepPC = 0
 }
@@ -1937,7 +1935,7 @@ func (cpu *CPU) op_sty() {
 func (cpu *CPU) op_tax() {
 	var src uint16
 	if cpu.M == 1 {
-		src = uint16(cpu.RAl)
+		src = uint16(cpu.RAh)<<8 | uint16(cpu.RAl)
 	} else {
 		src = cpu.RA
 	}
@@ -1946,7 +1944,7 @@ func (cpu *CPU) op_tax() {
 		cpu.RXl = byte(src)
 		cpu.setZN8(cpu.RXl)
 	} else {
-		cpu.RX = uint16(src)
+		cpu.RX = src
 		cpu.setZN16(cpu.RX)
 	}
 }
@@ -1955,7 +1953,7 @@ func (cpu *CPU) op_tax() {
 func (cpu *CPU) op_tay() {
 	var src uint16
 	if cpu.M == 1 {
-		src = uint16(cpu.RAl)
+		src = uint16(cpu.RAh)<<8 | uint16(cpu.RAl)
 	} else {
 		src = cpu.RA
 	}
@@ -1964,7 +1962,7 @@ func (cpu *CPU) op_tay() {
 		cpu.RYl = byte(src)
 		cpu.setZN8(cpu.RYl)
 	} else {
-		cpu.RY = uint16(src)
+		cpu.RY = src
 		cpu.setZN16(cpu.RY)
 	}
 }
@@ -1993,7 +1991,7 @@ func (cpu *CPU) op_txa() {
 		cpu.RAl = byte(src)
 		cpu.setZN8(cpu.RAl)
 	} else {
-		cpu.RA = uint16(src)
+		cpu.RA = src
 		cpu.setZN16(cpu.RA)
 	}
 }
@@ -2361,16 +2359,16 @@ func (cpu *CPU) op_xba() {
 
 // XCE - eXchange Carry and Emulation flags
 func (cpu *CPU) op_xce() {
-	if cpu.C == cpu.E {
-		return
-	}
-	if cpu.C == 1 {
-		cpu.C = cpu.E
+	c := cpu.C
+	cpu.C = cpu.E
+	if c == 1 {
+		// enabling E:
 		cpu.SetFlags(cpu.Flags() | 0x30)
 		cpu.E = 1 // after SetFlags() due to conflict
 		cpu.SP = 0x0100 | (cpu.SP & 0x00ff)
+		cpu.RX = cpu.RX & 0x00ff
+		cpu.RY = cpu.RY & 0x00ff
 	} else {
-		cpu.C = cpu.E
 		cpu.E = 0
 	}
 }
