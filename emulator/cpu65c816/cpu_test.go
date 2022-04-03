@@ -1,6 +1,7 @@
 package cpu65c816
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/alttpo/snes/emulator/bus"
 	"github.com/alttpo/snes/emulator/memory"
@@ -11,9 +12,9 @@ import (
 func TestCPU_Step(t *testing.T) {
 	roms := []string{
 		//"SNES/CPUTest/CPU/BRA/CPUBRA.sfc",
-		"SNES/CPUTest/CPU/ROR/CPUROR.sfc",
+		//"SNES/CPUTest/CPU/ROR/CPUROR.sfc",
 		//"SNES/CPUTest/CPU/CMP/CPUCMP.sfc",
-		//"SNES/CPUTest/CPU/RET/CPURET.sfc",
+		"SNES/CPUTest/CPU/RET/CPURET.sfc",
 		//"SNES/CPUTest/CPU/INC/CPUINC.sfc",
 		//"SNES/CPUTest/CPU/TRN/CPUTRN.sfc",
 		//"SNES/CPUTest/CPU/SBC/CPUSBC.sfc",
@@ -61,7 +62,7 @@ func TestCPU_Step(t *testing.T) {
 				}
 			}
 
-			mmio := testMMIO{}
+			mmio := testMMIO{t: t}
 			for bank := uint32(0); bank < 0x100; bank++ {
 				err = s.Bus.Attach(
 					&mmio,
@@ -196,9 +197,12 @@ func createSNES() (s *snes, err error) {
 }
 
 type testMMIO struct {
-	nmi  byte
-	scr  [0x10000]byte
-	addr uint16
+	t   *testing.T
+	nmi byte
+
+	scr      [0x10000]byte
+	addr     uint16
+	scrWrote bool
 }
 
 func (m *testMMIO) Read(address uint32) (value byte) {
@@ -245,6 +249,7 @@ func (m *testMMIO) Write(address uint32, value byte) {
 		//fmt.Fprintf(os.Stdout, "%c", value)
 		m.scr[m.addr] = value
 		m.addr++
+		m.scrWrote = true
 	}
 }
 
@@ -269,11 +274,26 @@ func (m *testMMIO) Dump(address uint32) []byte {
 }
 
 func (m *testMMIO) printScreen() {
-	fmt.Println("--------------------------------")
-	for y := 0; y < 32; y++ {
-		for x := 0; x < 32; x++ {
-			fmt.Printf("%c", m.scr[0x7C00+y<<5+x])
+	fail := false
+	failText := []byte("FAIL")
+	if bytes.Contains(m.scr[0x7C00:], failText) {
+		fail = true
+	}
+
+	if m.scrWrote {
+		fmt.Println("--------------------------------")
+		for y := 0; y < 32; y++ {
+			line := m.scr[0x7C00+y<<5 : 0x7C00+y<<5+32]
+			for x := 0; x < 32; x++ {
+				fmt.Printf("%c", line[x])
+			}
+			fmt.Println()
 		}
-		fmt.Println()
+
+		m.scrWrote = false
+	}
+
+	if fail {
+		m.t.FailNow()
 	}
 }
