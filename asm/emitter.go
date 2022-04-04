@@ -251,6 +251,11 @@ func (a *Emitter) Label(name string) uint32 {
 	return a.address
 }
 
+func (a *Emitter) GetLabel(name string) (value uint32, ok bool) {
+	value, ok = a.labels[name]
+	return
+}
+
 func (a *Emitter) addDanglingS8(label string) {
 	refs := a.danglingS8[label]
 	refs = append(refs, a.address-1)
