@@ -149,16 +149,33 @@ func (b *Bus) EaWrite(a uint32, value byte) {
 	mem.Write(a, value)
 }
 
-// Dumps 16 bytes of memory, aligned to 16 bytes, used by
-// memory viewers
-func (b *Bus) EaDump(a uint32) (uint32, []byte) {
-	a = a & 0x00fffff0 // round to segment
-	start := a
+func (b *Bus) EaDump(start uint32, end uint32, data []byte) int {
+	// determine start and end segments:
+	startK := (start & 0xff_fff0) >> 4
+	endK := (end & 0xff_fff0) >> 4
 
-	mem := b.segment[a>>4]
-	if mem == nil {
-		return start, nil
+	a := start
+	i := 0
+
+	// move segment by segment:
+	for k := startK; k <= endK; k++ {
+		s := b.segment[k]
+		if s == nil {
+			// skip the whole segment:
+			for n := 0; a <= end && n < 16; n++ {
+				a++
+				i++
+			}
+			continue
+		}
+
+		// copy the whole segment:
+		for n := 0; a <= end && n < 16; n++ {
+			data[i] = s.Read(a)
+			a++
+			i++
+		}
 	}
 
-	return start, mem.Dump(start)
+	return i
 }
