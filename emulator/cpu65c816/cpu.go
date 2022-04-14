@@ -348,6 +348,7 @@ type CPU struct {
 	Cycles    byte   // number of cycles for this step
 	stepPC    uint16 // how many bytes should PC be increased in this step?
 	abort     bool   // temporary flag to determine that cpu should stop
+	Stopped   bool   // set after STP instruction is executed
 
 	// previous register's value exists for debugging purposes
 	PRK byte   // previous value of program banK register
@@ -408,6 +409,7 @@ func (cpu *CPU) Reset() {
 	cpu.PC = cpu.nRead16_cross(0x00, 0xFFFC)
 	cpu.SetFlags(0x34)
 	cpu.abort = false
+	cpu.Stopped = false
 }
 
 /* ====================================================================
@@ -1079,6 +1081,9 @@ func (cpu *CPU) Step() (int, bool) {
 	// counter and PC update
 	cpu.AllCycles += uint64(cpu.Cycles)
 	cpu.PC += cpu.stepPC
+	if cpu.Stopped {
+		return int(cpu.Cycles), true
+	}
 	if cpu.abort {
 		cpu.abort = false
 		return int(cpu.Cycles), true
@@ -2216,7 +2221,7 @@ func (cpu *CPU) op_sep() {
 
 // STP - SToP the clock
 func (cpu *CPU) stp() {
-	cpu.abort = true
+	cpu.Stopped = true
 }
 
 // STZ - STore Zero
