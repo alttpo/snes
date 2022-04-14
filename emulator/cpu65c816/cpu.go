@@ -350,10 +350,9 @@ type CPU struct {
 	abort     bool   // temporary flag to determine that cpu should stop
 
 	// previous register's value exists for debugging purposes
-	PRK     byte   // previous value of program banK register
-	PPC     uint16 // previous value Program Counter
-	WDM     byte   // argument WDM command, for debugging purposes
-	Counter uint64 // custom counter driven by WDM command
+	PRK byte   // previous value of program banK register
+	PPC uint16 // previous value Program Counter
+	WDM byte   // argument WDM command, for debugging purposes
 
 	// 65c816 registers
 	PC uint16 // Program Counter
@@ -2217,6 +2216,7 @@ func (cpu *CPU) op_sep() {
 
 // STP - SToP the clock
 func (cpu *CPU) stp() {
+	cpu.abort = true
 }
 
 // STZ - STore Zero
@@ -2334,14 +2334,7 @@ func (cpu *CPU) wai() {
 //         >=10 are interpreted by emulator
 func (cpu *CPU) op_wdm() {
 	cpu.WDM = cpu.cmdRead()
-	switch {
-	case cpu.WDM == 0:
-		cpu.Counter = 0
-	case cpu.WDM > 0 && cpu.WDM < 10:
-		cpu.Counter += uint64(cpu.WDM)
-	default:
-		cpu.abort = true
-	}
+	cpu.abort = true
 }
 
 // XBA - eXchange B and A accumulator
