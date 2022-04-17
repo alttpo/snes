@@ -238,13 +238,13 @@ func (c *CPU) DisassembleTo(myPC uint16, w io.Writer) {
 	}
 
 	if c.M == 0 && c.X == 0 {
-		_, _ = fmt.Fprintf(w, " A=%04x X=%04X Y=%04X", c.RA, c.RX, c.RY)
+		_, _ = fmt.Fprintf(w, " A=%04x X=%04x Y=%04x", c.RA, c.RX, c.RY)
 	} else if c.M == 0 && c.X != 0 {
-		_, _ = fmt.Fprintf(w, " A=%04x X=--%02X Y=--%02X", c.RA, c.RXl, c.RYl)
+		_, _ = fmt.Fprintf(w, " A=%04x X=--%02x Y=--%02x", c.RA, c.RXl, c.RYl)
 	} else if c.M != 0 && c.X == 0 {
-		_, _ = fmt.Fprintf(w, " A=--%02x X=%04X Y=%04X", c.RAl, c.RX, c.RY)
+		_, _ = fmt.Fprintf(w, " A=--%02x X=%04x Y=%04x", c.RAl, c.RX, c.RY)
 	} else if c.M != 0 && c.X != 0 {
-		_, _ = fmt.Fprintf(w, " A=--%02x X=--%02X Y=--%02X", c.RAl, c.RXl, c.RYl)
+		_, _ = fmt.Fprintf(w, " A=--%02x X=--%02x Y=--%02x", c.RAl, c.RXl, c.RYl)
 	}
 	_, _ = fmt.Fprintf(w, " %s%s%s%s%s%s%s%s",
 		printCPUFlags(c.N, "N"),
