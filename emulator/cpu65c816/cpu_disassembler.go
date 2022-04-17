@@ -236,6 +236,26 @@ func (c *CPU) DisassembleTo(myPC uint16, w io.Writer) {
 		c.formatInstructionModeTo(w, mode, 0, 0, 0, 0)
 		_, _ = fmt.Fprintf(w, "│")
 	}
+
+	if c.M == 0 && c.X == 0 {
+		_, _ = fmt.Fprintf(w, " A=%04x X=%04X Y=%04X", c.RA, c.RX, c.RY)
+	} else if c.M == 0 && c.X != 0 {
+		_, _ = fmt.Fprintf(w, " A=%04x X=--%02X Y=--%02X", c.RA, c.RXl, c.RYl)
+	} else if c.M != 0 && c.X == 0 {
+		_, _ = fmt.Fprintf(w, " A=--%02x X=%04X Y=%04X", c.RAl, c.RX, c.RY)
+	} else if c.M != 0 && c.X != 0 {
+		_, _ = fmt.Fprintf(w, " A=--%02x X=--%02X Y=--%02X", c.RAl, c.RXl, c.RYl)
+	}
+	_, _ = fmt.Fprintf(w, " %s%s%s%s%s%s%s%s",
+		printCPUFlags(c.N, "N"),
+		printCPUFlags(c.V, "V"),
+		printCPUFlags(c.M, "M"),
+		printCPUFlags(c.X, "X"),
+		printCPUFlags(c.D, "D"),
+		printCPUFlags(c.I, "I"),
+		printCPUFlags(c.Z, "Z"),
+		printCPUFlags(c.C, "C"),
+	)
 }
 
 func (c *CPU) formatInstructionModeTo(w io.Writer, mode byte, w0 byte, w1 byte, w2 byte, w3 byte) {
