@@ -837,6 +837,14 @@ func (a *Emitter) PHD() {
 	a.emit1("phd", [1]byte{0x0B})
 }
 
+func (a *Emitter) PHK() {
+	a.emit1("phk", [1]byte{0x4B})
+}
+
+func (a *Emitter) TCD() {
+	a.emit1("tcd", [1]byte{0x5B})
+}
+
 func (a *Emitter) PLD() {
 	a.emit1("pld", [1]byte{0x2B})
 }
