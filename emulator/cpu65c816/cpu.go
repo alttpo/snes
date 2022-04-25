@@ -341,7 +341,7 @@ func (c *CPU) createTable() {
 type CPU struct {
 	Bus *bus.Bus
 
-	info stepInfo
+	StepInfo
 
 	// additional emulator variables
 	AllCycles uint64 // total number of cycles of CPU instance
@@ -384,8 +384,7 @@ type CPU struct {
 	B byte // Break flag
 	E byte // Emulation mode flag
 
-	interrupt byte // interrupt type to perform
-	stall     int  // number of cycles to stall
+	Interrupt byte // interrupt type to perform
 }
 
 func New(bus *bus.Bus) (*CPU, error) {
@@ -429,7 +428,7 @@ func pagesDiffer(a, b uint16) bool {
 // note 5 and 6 in [3]
 func (cpu *CPU) addBranchCycles() {
 	cpu.Cycles++
-	if pagesDiffer(cpu.PC+2, cpu.info.addr) { // at this moment PC points to jump and addr contains new addr
+	if pagesDiffer(cpu.PC+2, cpu.StepInfo.Addr) { // at this moment PC points to jump and addr contains new addr
 		cpu.Cycles++
 	}
 }
@@ -505,17 +504,17 @@ func (cpu *CPU) nRead16_cross(bank byte, addr uint16) uint16 {
 }
 
 func (cpu *CPU) cmdRead() byte {
-	switch cpu.info.mode {
+	switch cpu.StepInfo.Mode {
 
 	case m_Accumulator:
 		return cpu.RAl
 
 	case m_Immediate, m_Immediate_flagM, m_Immediate_flagX:
-		//return cpu.Bus.EaRead(uint32(cpu.RK) << 16 | uint32(cpu.info.addr)) // addr=PC+1
-		return cpu.nRead(cpu.RK, cpu.info.addr)
+		//return cpu.Bus.EaRead(uint32(cpu.RK) << 16 | uint32(cpu.StepInfo.Addr)) // Addr=PC+1
+		return cpu.nRead(cpu.RK, cpu.StepInfo.Addr)
 
 	case m_DP, m_DP_X, m_DP_Y, m_Stack_Relative:
-		return cpu.Bus.EaRead(uint32(cpu.info.addr)) // cpu.info.addr is uint16
+		return cpu.Bus.EaRead(uint32(cpu.StepInfo.Addr)) // cpu.StepInfo.Addr is uint16
 
 	case m_DP_Indirect_Long,
 		m_DP_Indirect_Long_Y,
@@ -524,17 +523,17 @@ func (cpu *CPU) cmdRead() byte {
 		m_Absolute_X,
 		m_Absolute_Y,
 		m_Stack_Relative_Indirect_Y:
-		return cpu.Bus.EaRead(cpu.info.ea)
+		return cpu.Bus.EaRead(cpu.StepInfo.EA)
 
 	case m_Absolute,
 		m_DP_X_Indirect,
 		m_DP_Indirect,
 		m_DP_Indirect_Y:
-		return cpu.nRead(cpu.RDBR, cpu.info.addr)
+		return cpu.nRead(cpu.RDBR, cpu.StepInfo.Addr)
 
 	default:
-		//fmt.Fprintf(&cpu.LogBuf, "cmdRead8: unknown mode %v\n", cpu.info.mode)
-		log.Println(fmt.Sprintf("cmdRead8: unknown mode %v", cpu.info.mode))
+		//fmt.Fprintf(&cpu.LogBuf, "cmdRead8: unknown Mode %v\n", cpu.StepInfo.Mode)
+		log.Println(fmt.Sprintf("cmdRead8: unknown mode %v", cpu.StepInfo.Mode))
 
 		return 0
 	}
@@ -542,16 +541,16 @@ func (cpu *CPU) cmdRead() byte {
 }
 
 func (cpu *CPU) cmdRead16() uint16 {
-	switch cpu.info.mode {
+	switch cpu.StepInfo.Mode {
 
 	case m_Accumulator:
 		return cpu.RA
 
 	case m_Immediate, m_Immediate_flagM, m_Immediate_flagX:
-		return cpu.nRead16_wrap(cpu.RK, cpu.info.addr)
+		return cpu.nRead16_wrap(cpu.RK, cpu.StepInfo.Addr)
 
 	case m_DP, m_DP_X, m_DP_Y, m_Stack_Relative:
-		return cpu.nRead16_wrap(0x00, cpu.info.addr)
+		return cpu.nRead16_wrap(0x00, cpu.StepInfo.Addr)
 
 	case m_DP_Indirect_Long,
 		m_DP_Indirect_Long_Y,
@@ -561,29 +560,29 @@ func (cpu *CPU) cmdRead16() uint16 {
 		m_Absolute_Y,
 		m_Absolute_X_Indirect,
 		m_Stack_Relative_Indirect_Y:
-		ll := cpu.Bus.EaRead(cpu.info.ea) // todo - zastapic to jakos?
-		hh := cpu.Bus.EaRead(cpu.info.ea + 1)
+		ll := cpu.Bus.EaRead(cpu.StepInfo.EA) // todo - zastapic to jakos?
+		hh := cpu.Bus.EaRead(cpu.StepInfo.EA + 1)
 		return uint16(hh)<<8 | uint16(ll)
 
 	case m_Absolute,
 		m_DP_X_Indirect,
 		m_DP_Indirect,
 		m_DP_Indirect_Y:
-		return cpu.nRead16_cross(cpu.RDBR, cpu.info.addr)
+		return cpu.nRead16_cross(cpu.RDBR, cpu.StepInfo.Addr)
 
 	default:
-		//fmt.Fprintf(&cpu.LogBuf, "cmdRead16: unknown mode %v\n", cpu.info.mode)
-		log.Println(fmt.Sprintf("cmdRead16: unknown mode %v", cpu.info.mode))
+		//fmt.Fprintf(&cpu.LogBuf, "cmdRead16: unknown Mode %v\n", cpu.StepInfo.Mode)
+		log.Println(fmt.Sprintf("cmdRead16: unknown mode %v", cpu.StepInfo.Mode))
 		return 0
 	}
 
 }
 
 func (cpu *CPU) cmdWrite(value byte) {
-	switch cpu.info.mode {
+	switch cpu.StepInfo.Mode {
 
 	case m_DP, m_DP_X, m_DP_Y, m_Stack_Relative:
-		cpu.Bus.EaWrite(uint32(cpu.info.addr), value) // info.addr is uint16
+		cpu.Bus.EaWrite(uint32(cpu.StepInfo.Addr), value) // StepInfo.Addr is uint16
 
 	case m_DP_Indirect_Long,
 		m_DP_Indirect_Long_Y,
@@ -592,26 +591,26 @@ func (cpu *CPU) cmdWrite(value byte) {
 		m_Absolute_X,
 		m_Absolute_Y,
 		m_Stack_Relative_Indirect_Y:
-		cpu.Bus.EaWrite(cpu.info.ea, value)
+		cpu.Bus.EaWrite(cpu.StepInfo.EA, value)
 
 	case m_Absolute,
 		m_DP_X_Indirect,
 		m_DP_Indirect,
 		m_DP_Indirect_Y:
-		cpu.nWrite(cpu.RDBR, cpu.info.addr, value)
+		cpu.nWrite(cpu.RDBR, cpu.StepInfo.Addr, value)
 
 	default:
-		log.Println(fmt.Sprintf("cmdWrite: unknown mode %v", cpu.info.mode))
+		log.Println(fmt.Sprintf("cmdWrite: unknown mode %v", cpu.StepInfo.Mode))
 	}
 
 }
 
 func (cpu *CPU) cmdWrite16(value uint16) {
-	switch cpu.info.mode {
+	switch cpu.StepInfo.Mode {
 
 	// I'm not so sure though that m_DP modes wraps at bank0
 	case m_DP, m_DP_X, m_DP_Y, m_Stack_Relative:
-		cpu.nWrite16_wrap(0x00, cpu.info.addr, value)
+		cpu.nWrite16_wrap(0x00, cpu.StepInfo.Addr, value)
 
 	case m_DP_Indirect_Long,
 		m_DP_Indirect_Long_Y,
@@ -622,17 +621,17 @@ func (cpu *CPU) cmdWrite16(value uint16) {
 		m_Stack_Relative_Indirect_Y:
 		ll := byte(value)
 		hh := byte(value >> 8)
-		cpu.Bus.EaWrite(cpu.info.ea, ll)
-		cpu.Bus.EaWrite(cpu.info.ea+1, hh)
+		cpu.Bus.EaWrite(cpu.StepInfo.EA, ll)
+		cpu.Bus.EaWrite(cpu.StepInfo.EA+1, hh)
 
 	case m_Absolute,
 		m_DP_X_Indirect,
 		m_DP_Indirect,
 		m_DP_Indirect_Y:
-		cpu.nWrite16_cross(cpu.RDBR, cpu.info.addr, value)
+		cpu.nWrite16_cross(cpu.RDBR, cpu.StepInfo.Addr, value)
 
 	default:
-		log.Println(fmt.Sprintf("cmdWrite16: unknown mode %v", cpu.info.mode))
+		log.Println(fmt.Sprintf("cmdWrite16: unknown mode %v", cpu.StepInfo.Mode))
 	}
 }
 
@@ -795,13 +794,13 @@ func (cpu *CPU) setZN16(value uint16) {
 
 // triggerNMI causes a non-maskable interrupt to occur on the next cycle
 func (cpu *CPU) triggerNMI() {
-	cpu.interrupt = interruptNMI
+	cpu.Interrupt = interruptNMI
 }
 
 // triggerIRQ causes an IRQ interrupt to occur on the next cycle
 func (cpu *CPU) TriggerIRQ() {
 	if cpu.I == 0 {
-		cpu.interrupt = interruptIRQ
+		cpu.Interrupt = interruptIRQ
 	}
 }
 
@@ -812,12 +811,11 @@ func (cpu *CPU) TriggerIRQ() {
  * ====================================================================
  */
 
-// stepInfo contains information that the instruction functions use
-type stepInfo struct {
-	ea   uint32 // effective addres    - 24 bit in 65c816
-	addr uint16 // address within bank - used in place of ea in some modes
-	pc   uint16
-	mode byte
+// StepInfo contains information that the instruction functions use
+type StepInfo struct {
+	EA   uint32 // effective addres    - 24 bit in 65c816
+	Addr uint16 // address within bank - used in place of EA in some modes
+	Mode byte
 }
 
 // Step executes a single CPU instruction
@@ -830,13 +828,13 @@ func (cpu *CPU) Step() (int, bool) {
 
 	//cycles := cpu.Cycles
 
-	switch cpu.interrupt {
+	switch cpu.Interrupt {
 	case interruptNMI:
 		cpu.nmi()
 	case interruptIRQ:
 		cpu.irq()
 	}
-	cpu.interrupt = interruptNone
+	cpu.Interrupt = interruptNone
 
 	cpu.PPC = cpu.PC
 	cpu.PRK = cpu.RK
@@ -869,7 +867,7 @@ func (cpu *CPU) Step() (int, bool) {
 			ea = (uint32(cpu.RDBR)<<16 | uint32(arg16)) + uint32(cpu.RX)
 			pageCrossed = pagesDiffer(arg16, arg16+cpu.RX)
 		}
-		//fmt.Fprintf(&cpu.LogBuf, "m_Absolute_X: arg16 %04x ea $%06x\n", arg16, ea)
+		//fmt.Fprintf(&cpu.LogBuf, "m_Absolute_X: arg16 %04x EA $%06x\n", arg16, EA)
 
 	// $9876, Y       - p. 290 or 5.3
 	case m_Absolute_Y:
@@ -881,7 +879,7 @@ func (cpu *CPU) Step() (int, bool) {
 			ea = (uint32(cpu.RDBR)<<16 | uint32(arg16)) + uint32(cpu.RY)
 			pageCrossed = pagesDiffer(arg16, arg16+cpu.RY)
 		}
-		//fmt.Fprintf(&cpu.LogBuf, "m_Absolute_Y: arg16 %04x ea $%06x\n", arg16, ea)
+		//fmt.Fprintf(&cpu.LogBuf, "m_Absolute_Y: arg16 %04x EA $%06x\n", arg16, EA)
 
 	// A              - p. 296 or 5.6
 	case m_Accumulator:
@@ -891,7 +889,7 @@ func (cpu *CPU) Step() (int, bool) {
 	case m_Immediate:
 		addr = cpu.PC + 1
 		ea = uint32(cpu.RK)<<16 | uint32(cpu.PC+1) // XXX - required for old SEP implementation
-		//fmt.Fprintf(&cpu.LogBuf, "m_Immediate: ea $%06x\n", ea)
+		//fmt.Fprintf(&cpu.LogBuf, "m_Immediate: EA $%06x\n", EA)
 
 	// #$aa or #$aabb - p. 306 or 5.14, flag M size dependent
 	case m_Immediate_flagM:
@@ -982,7 +980,7 @@ func (cpu *CPU) Step() (int, bool) {
 		}
 		addr = cpu.nRead16_wrap(cpu.RK, arg16)
 		ea = uint32(cpu.RK)<<16 | uint32(arg16)
-		//fmt.Fprintf(&cpu.LogBuf, "m_Absolute_X_Indirect: arg16 $%04x addr $%04x ea $%06x\n", arg16, addr, ea)
+		//fmt.Fprintf(&cpu.LogBuf, "m_Absolute_X_Indirect: arg16 $%04x addr $%04x EA $%06x\n", arg16, addr, EA)
 
 	// ($1234)        - p. 292 or 5.4
 	case m_Absolute_Indirect:
@@ -992,13 +990,13 @@ func (cpu *CPU) Step() (int, bool) {
 	// [$1234]        - p. 293 or 5.10
 	case m_Absolute_Indirect_Long:
 		addr = cpu.nRead16_wrap(cpu.RK, cpu.PC+1)
-		//ea     = cpu.nRead24_wrap(0x00, arg16)
-		//fmt.Fprintf(&cpu.LogBuf, "m_Absolute_Indirect_Long: arg16 $%04x ea $%06x\n", arg16, ea)
+		//EA     = cpu.nRead24_wrap(0x00, arg16)
+		//fmt.Fprintf(&cpu.LogBuf, "m_Absolute_Indirect_Long: arg16 $%04x EA $%06x\n", arg16, EA)
 
 	// $abcdef        - p. 294 or 5.16
 	case m_Absolute_Long:
 		ea = cpu.nRead24_wrap(cpu.RK, cpu.PC+1)
-		//fmt.Fprintf(&cpu.LogBuf, "m_Absolute_Long: ea $%06x\n", ea)
+		//fmt.Fprintf(&cpu.LogBuf, "m_Absolute_Long: EA $%06x\n", EA)
 
 	// $abcdex, X     - p. 295 or 5.17
 	case m_Absolute_Long_X:
@@ -1008,7 +1006,7 @@ func (cpu *CPU) Step() (int, bool) {
 		} else {
 			ea = ea + uint32(cpu.RX)
 		}
-		//fmt.Fprintf(&cpu.LogBuf, "m_Absolute_Long: ea $%06x\n", ea)
+		//fmt.Fprintf(&cpu.LogBuf, "m_Absolute_Long: EA $%06x\n", EA)
 
 	// rel8           - p. 308 or 5.18 (BRA)
 	case m_PC_Relative:
@@ -1044,7 +1042,7 @@ func (cpu *CPU) Step() (int, bool) {
 		} else {
 			ea = (uint32(cpu.RDBR)<<16 | uint32(arg16)) + uint32(cpu.RY)
 		}
-		//fmt.Fprintf(&cpu.LogBuf, "ea $%06x ", ea)
+		//fmt.Fprintf(&cpu.LogBuf, "EA $%06x ", EA)
 
 	case m_BlockMove:
 		addr = cpu.PC + 1
@@ -1075,7 +1073,7 @@ func (cpu *CPU) Step() (int, bool) {
 	}
 
 	// instruction execution
-	cpu.info = stepInfo{ea, addr, cpu.PC, mode}
+	cpu.StepInfo = StepInfo{ea, addr, mode}
 	instructions[opcode].proc()
 
 	// counter and PC update
@@ -1209,7 +1207,7 @@ func (cpu *CPU) op_and() {
 
 // ASL - Arithmetic Shift Left
 func (cpu *CPU) op_asl() {
-	if cpu.info.mode == m_Accumulator {
+	if cpu.StepInfo.Mode == m_Accumulator {
 		if cpu.M == 1 {
 			cpu.C = (cpu.RAl >> 7) & 1
 			cpu.RAl = (cpu.RAl << 1) // or cpu.RAl <<= 1
@@ -1240,7 +1238,7 @@ func (cpu *CPU) op_asl() {
 func (cpu *CPU) op_bcc() {
 	if cpu.C == 0 {
 		cpu.addBranchCycles() // always before PC change!
-		cpu.PC = cpu.info.addr
+		cpu.PC = cpu.StepInfo.Addr
 		cpu.stepPC = 0
 	}
 }
@@ -1249,7 +1247,7 @@ func (cpu *CPU) op_bcc() {
 func (cpu *CPU) op_bcs() {
 	if cpu.C != 0 {
 		cpu.addBranchCycles()
-		cpu.PC = cpu.info.addr
+		cpu.PC = cpu.StepInfo.Addr
 		cpu.stepPC = 0
 	}
 }
@@ -1258,7 +1256,7 @@ func (cpu *CPU) op_bcs() {
 func (cpu *CPU) op_beq() {
 	if cpu.Z != 0 {
 		cpu.addBranchCycles()
-		cpu.PC = cpu.info.addr
+		cpu.PC = cpu.StepInfo.Addr
 		cpu.stepPC = 0
 	}
 }
@@ -1294,7 +1292,7 @@ func (cpu *CPU) op_bit() {
 		val := cpu.cmdRead()
 		cpu.setZ8(cpu.RAl & val)
 
-		if cpu.info.mode != m_Immediate_flagM {
+		if cpu.StepInfo.Mode != m_Immediate_flagM {
 			cpu.setN8(val)
 			if val&0x40 != 0 {
 				cpu.V = 1
@@ -1307,7 +1305,7 @@ func (cpu *CPU) op_bit() {
 		val := cpu.cmdRead16()
 		cpu.setZ16(cpu.RA & val)
 
-		if cpu.info.mode != m_Immediate_flagM {
+		if cpu.StepInfo.Mode != m_Immediate_flagM {
 			cpu.setN16(val)
 			if val&0x4000 != 0 {
 				cpu.V = 1
@@ -1322,7 +1320,7 @@ func (cpu *CPU) op_bit() {
 func (cpu *CPU) op_bmi() {
 	if cpu.N != 0 {
 		cpu.addBranchCycles()
-		cpu.PC = cpu.info.addr
+		cpu.PC = cpu.StepInfo.Addr
 		cpu.stepPC = 0
 	}
 }
@@ -1331,7 +1329,7 @@ func (cpu *CPU) op_bmi() {
 func (cpu *CPU) op_bne() {
 	if cpu.Z == 0 {
 		cpu.addBranchCycles()
-		cpu.PC = cpu.info.addr
+		cpu.PC = cpu.StepInfo.Addr
 		cpu.stepPC = 0
 	}
 }
@@ -1340,7 +1338,7 @@ func (cpu *CPU) op_bne() {
 func (cpu *CPU) op_bpl() {
 	if cpu.N == 0 {
 		cpu.addBranchCycles()
-		cpu.PC = cpu.info.addr
+		cpu.PC = cpu.StepInfo.Addr
 		cpu.stepPC = 0
 	}
 }
@@ -1374,7 +1372,7 @@ func (cpu *CPU) op_brk() {
 func (cpu *CPU) op_bvc() {
 	if cpu.V == 0 {
 		cpu.addBranchCycles()
-		cpu.PC = cpu.info.addr
+		cpu.PC = cpu.StepInfo.Addr
 		cpu.stepPC = 0
 	}
 }
@@ -1383,7 +1381,7 @@ func (cpu *CPU) op_bvc() {
 func (cpu *CPU) op_bvs() {
 	if cpu.V != 0 {
 		cpu.addBranchCycles()
-		cpu.PC = cpu.info.addr
+		cpu.PC = cpu.StepInfo.Addr
 		cpu.stepPC = 0
 	}
 }
@@ -1443,7 +1441,7 @@ func (cpu *CPU) op_cpy() {
 
 // DEC - Decrement Memory
 func (cpu *CPU) op_dec() {
-	if cpu.info.mode == m_Accumulator {
+	if cpu.StepInfo.Mode == m_Accumulator {
 		if cpu.M == 1 {
 			cpu.RAl--
 			cpu.setZN8(cpu.RAl)
@@ -1499,7 +1497,7 @@ func (cpu *CPU) op_eor() {
 
 // INC - Increment Memory
 func (cpu *CPU) op_inc() {
-	if cpu.info.mode == m_Accumulator {
+	if cpu.StepInfo.Mode == m_Accumulator {
 		if cpu.M == 1 {
 			cpu.RAl++
 			cpu.setZN8(cpu.RAl)
@@ -1545,17 +1543,17 @@ func (cpu *CPU) op_iny() {
 // JMP - Jump
 // XXX - improve that!
 func (cpu *CPU) op_jmp() {
-	switch cpu.info.mode {
+	switch cpu.StepInfo.Mode {
 	case m_Absolute:
-		cpu.PC = cpu.info.addr
+		cpu.PC = cpu.StepInfo.Addr
 	case m_Absolute_Indirect:
-		cpu.PC = cpu.nRead16_wrap(0x00, cpu.info.addr)
+		cpu.PC = cpu.nRead16_wrap(0x00, cpu.StepInfo.Addr)
 	case m_Absolute_Long:
-		cpu.PC = uint16(cpu.info.ea)
-		cpu.RK = byte(cpu.info.ea >> 16)
+		cpu.PC = uint16(cpu.StepInfo.EA)
+		cpu.RK = byte(cpu.StepInfo.EA >> 16)
 	case m_Absolute_Indirect_Long:
-		cpu.PC = cpu.nRead16_wrap(0x00, cpu.info.addr)
-		cpu.RK = cpu.nRead(0x00, cpu.info.addr+2)
+		cpu.PC = cpu.nRead16_wrap(0x00, cpu.StepInfo.Addr)
+		cpu.RK = cpu.nRead(0x00, cpu.StepInfo.Addr+2)
 	default:
 		cpu.PC = cpu.cmdRead16()
 	}
@@ -1566,17 +1564,17 @@ func (cpu *CPU) op_jmp() {
 func (cpu *CPU) op_jsl() {
 	cpu.push(cpu.RK)
 	cpu.push16(cpu.PC + 3)
-	cpu.PC = uint16(cpu.info.ea)
+	cpu.PC = uint16(cpu.StepInfo.EA)
 	cpu.stepPC = 0
-	cpu.RK = byte(cpu.info.ea >> 16)
+	cpu.RK = byte(cpu.StepInfo.EA >> 16)
 }
 
 // JSR - Jump to Subroutine
 func (cpu *CPU) op_jsr() {
 	cpu.push16(cpu.PC + 2)
-	switch cpu.info.mode {
+	switch cpu.StepInfo.Mode {
 	case m_Absolute:
-		cpu.PC = cpu.info.addr
+		cpu.PC = cpu.StepInfo.Addr
 	default:
 		cpu.PC = cpu.cmdRead16()
 	}
@@ -1618,7 +1616,7 @@ func (cpu *CPU) op_ldy() {
 
 // LSR - Logical Shift Right
 func (cpu *CPU) op_lsr() {
-	if cpu.info.mode == m_Accumulator {
+	if cpu.StepInfo.Mode == m_Accumulator {
 		if cpu.M == 1 {
 			cpu.C = cpu.RAl & 1
 			cpu.RAl >>= 1
@@ -1713,7 +1711,7 @@ func (cpu *CPU) op_plp() {
 // ROL - Rotate Left
 func (cpu *CPU) op_rol() {
 	c := cpu.C
-	if cpu.info.mode == m_Accumulator {
+	if cpu.StepInfo.Mode == m_Accumulator {
 		if cpu.M == 1 {
 			cpu.C = (cpu.RAl >> 7) & 1
 			cpu.RAl = (cpu.RAl << 1) | c
@@ -1743,7 +1741,7 @@ func (cpu *CPU) op_rol() {
 // ROR - Rotate Right
 func (cpu *CPU) op_ror() {
 	c := cpu.C
-	if cpu.info.mode == m_Accumulator {
+	if cpu.StepInfo.Mode == m_Accumulator {
 		if cpu.M == 1 {
 			cpu.C = cpu.RAl & 1
 			cpu.RAl = (cpu.RAl >> 1) | (c << 7)
@@ -1876,7 +1874,7 @@ func (cpu *CPU) op_sbc() {
 // SBC - Subtract with Carry
 func (cpu *CPU) sbc() {
 	a := cpu.RA
-	b := cpu.Read(cpu.info.address)
+	b := cpu.Read(cpu.StepInfo.address)
 	c := cpu.C
 	cpu.RA = a - b - (1 - c)
 	cpu.setZN(cpu.RA)
@@ -2037,13 +2035,13 @@ func (cpu *CPU) op_tya() {
 // BRA - BRanch Always
 func (cpu *CPU) op_bra() {
 	cpu.addBranchCycles() // always before PC change!
-	cpu.PC = cpu.info.addr
+	cpu.PC = cpu.StepInfo.Addr
 	cpu.stepPC = 0
 }
 
 // BRL - BRanch Long
 func (cpu *CPU) op_brl() {
-	cpu.PC = cpu.info.addr
+	cpu.PC = cpu.StepInfo.Addr
 	cpu.stepPC = 0
 }
 
@@ -2093,8 +2091,8 @@ accumulator means six bytes will be moved.
 
 */
 func (cpu *CPU) op_mvn() {
-	dst := cpu.nRead(cpu.RK, cpu.info.addr)
-	src := cpu.nRead(cpu.RK, cpu.info.addr+1)
+	dst := cpu.nRead(cpu.RK, cpu.StepInfo.Addr)
+	src := cpu.nRead(cpu.RK, cpu.StepInfo.Addr+1)
 
 	cpu.RDBR = dst
 	if cpu.X == 1 {
@@ -2117,8 +2115,8 @@ func (cpu *CPU) op_mvn() {
 
 // MVP - MoVe memory Positive
 func (cpu *CPU) op_mvp() {
-	dst := cpu.nRead(cpu.RK, cpu.info.addr)
-	src := cpu.nRead(cpu.RK, cpu.info.addr+1)
+	dst := cpu.nRead(cpu.RK, cpu.StepInfo.Addr)
+	src := cpu.nRead(cpu.RK, cpu.StepInfo.Addr+1)
 
 	cpu.RDBR = dst
 	if cpu.X == 1 {
@@ -2180,7 +2178,7 @@ func (cpu *CPU) op_ply() {
 func (cpu *CPU) op_pea() {
 	cpu.push16(cpu.cmdRead16())
 	//val := cpu.cmdRead16()
-	//fmt.Fprintf(&cpu.LogBuf, "PEA %04x %04x\n", val, cpu.info.addr)
+	//fmt.Fprintf(&cpu.LogBuf, "PEA %04x %04x\n", val, cpu.StepInfo.Addr)
 }
 
 // PLD - PulL Direct register
@@ -2191,7 +2189,7 @@ func (cpu *CPU) op_pld() {
 
 // PER - Push Effective Relative address
 func (cpu *CPU) op_per() {
-	cpu.push16(cpu.info.addr)
+	cpu.push16(cpu.StepInfo.Addr)
 }
 
 // PEI - Push Effective Indirect address
@@ -2207,15 +2205,15 @@ func (cpu *CPU) op_plb() {
 
 // REset Processor status bits
 func (cpu *CPU) op_rep() {
-	neg_flags := ^cpu.Bus.EaRead(cpu.info.ea)
+	neg_flags := ^cpu.Bus.EaRead(cpu.StepInfo.EA)
 	tmp_flags := cpu.Flags() & neg_flags
-	//fmt.Fprintf(&cpu.LogBuf, "op_rep %08b %08b %08b %08b\n", cpu.Bus.EaRead(cpu.info.ea), neg_flags, cpu.Flags(), tmp_flags)
+	//fmt.Fprintf(&cpu.LogBuf, "op_rep %08b %08b %08b %08b\n", cpu.Bus.EaRead(cpu.StepInfo.EA), neg_flags, cpu.Flags(), tmp_flags)
 	cpu.SetFlags(tmp_flags)
 }
 
 // SEt Processor status bits
 func (cpu *CPU) op_sep() {
-	tmp_flags := cpu.Flags() | cpu.Bus.EaRead(cpu.info.ea)
+	tmp_flags := cpu.Flags() | cpu.Bus.EaRead(cpu.StepInfo.EA)
 	cpu.SetFlags(tmp_flags)
 }
 
