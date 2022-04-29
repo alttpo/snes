@@ -22,10 +22,6 @@ type instructionType struct {
 	proc   func()
 }
 
-var (
-	instructions [256]instructionType
-)
-
 const CPUFrequency = 14000000 // 14MHz. XXX - fix it and move to platform?
 
 // interrupt types
@@ -78,7 +74,7 @@ const (
 //
 //
 func (c *CPU) createTable() {
-	instructions = [256]instructionType{
+	c.instructions = [256]instructionType{
 		{0x00, "brk", m_Implied, 1, 8, c.op_brk},                   // BRK
 		{0x01, "ora", m_DP_X_Indirect, 2, 7, c.op_ora},             // ORA ($10,X)
 		{0x02, "cop", m_Immediate, 2, 8, c.op_cop},                 // COP #$12
@@ -385,16 +381,28 @@ type CPU struct {
 	E byte // Emulation mode flag
 
 	Interrupt byte // interrupt type to perform
+
+	// this cannot be copied because the proc func()s reference the specific *CPU instance:
+	// TODO: redesign the opcodes to take a *CPU as first parameter instead of method receiver
+	instructions [256]instructionType
 }
 
 func New(bus *bus.Bus) (*CPU, error) {
-	cpu := CPU{Bus: bus}
+	cpu := &CPU{}
+	cpu.Init(bus)
+	return cpu, nil
+}
+
+func (cpu *CPU) Init(bus *bus.Bus) {
+	*cpu = CPU{Bus: bus}
 	cpu.WDM = 0
-	//cpu.LogBuf = bytes.Buffer{}
 	cpu.createTable()
-	//cpu.Reset()
-	//log.Println("cpu: 65c816 initialized")
-	return &cpu, nil
+}
+
+func (cpu *CPU) InitFrom(other *CPU, bus *bus.Bus) {
+	*cpu = *other
+	cpu.Bus = bus
+	cpu.createTable()
 }
 
 // Reset resets the CPU to its initial powerup state
@@ -839,9 +847,9 @@ func (cpu *CPU) Step() (int, bool) {
 	cpu.PPC = cpu.PC
 	cpu.PRK = cpu.RK
 	opcode := cpu.nRead(cpu.RK, cpu.PC)
-	mode := instructions[opcode].mode
-	cpu.stepPC = uint16(instructions[opcode].size)
-	cpu.Cycles = instructions[opcode].cycles
+	mode := cpu.instructions[opcode].mode
+	cpu.stepPC = uint16(cpu.instructions[opcode].size)
+	cpu.Cycles = cpu.instructions[opcode].cycles
 
 	// addressing mode calculation
 	//
@@ -1074,7 +1082,7 @@ func (cpu *CPU) Step() (int, bool) {
 
 	// instruction execution
 	cpu.StepInfo = StepInfo{ea, addr, mode}
-	instructions[opcode].proc()
+	cpu.instructions[opcode].proc()
 
 	// counter and PC update
 	cpu.AllCycles += uint64(cpu.Cycles)

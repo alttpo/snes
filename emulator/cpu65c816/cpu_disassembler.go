@@ -24,7 +24,7 @@ func (c *CPU) Disassemble(myPC uint16) string {
 
 	//opcode := c.Read(myPC)
 	opcode := c.nRead(c.RK, myPC)
-	mode := instructions[opcode].mode
+	mode := c.instructions[opcode].mode
 
 	// crude and incosistent size adjust
 	var sizeAdjust byte
@@ -35,8 +35,8 @@ func (c *CPU) Disassemble(myPC uint16) string {
 		sizeAdjust = c.X
 	}
 
-	bytes := instructions[opcode].size - sizeAdjust
-	name := instructions[opcode].name
+	bytes := c.instructions[opcode].size - sizeAdjust
+	name := c.instructions[opcode].name
 
 	var arg string
 	switch bytes {
@@ -181,7 +181,7 @@ func (c *CPU) DisassembleTo(myPC uint16, w io.Writer) {
 
 	//opcode := c.Read(myPC)
 	opcode := c.nRead(c.RK, myPC)
-	mode := instructions[opcode].mode
+	mode := c.instructions[opcode].mode
 
 	// crude and incosistent size adjust
 	var sizeAdjust byte
@@ -192,8 +192,8 @@ func (c *CPU) DisassembleTo(myPC uint16, w io.Writer) {
 		sizeAdjust = c.X
 	}
 
-	bytes := instructions[opcode].size - sizeAdjust
-	name := instructions[opcode].name
+	bytes := c.instructions[opcode].size - sizeAdjust
+	name := c.instructions[opcode].name
 
 	//if c.Cycles == 0 {
 	//	_, _ = fmt.Fprintf(w, "--:----│           │                 │")
