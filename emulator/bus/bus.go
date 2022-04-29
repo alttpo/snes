@@ -59,11 +59,19 @@ func (b *Bus) Clear() {
 }
 
 func New() (*Bus, error) {
-	return &Bus{entries: make([]busEntry, 0)}, nil
+	b := &Bus{}
+	b.Init(10)
+	return b, nil
 }
 
 func NewWithSizeHint(cap int) (*Bus, error) {
-	return &Bus{entries: make([]busEntry, 0, cap)}, nil
+	b := &Bus{}
+	b.Init(cap)
+	return b, nil
+}
+
+func (b *Bus) Init(cap int) {
+	b.entries = make([]busEntry, 0, cap)
 }
 
 // There are two variants possible:
