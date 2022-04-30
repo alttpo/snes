@@ -343,13 +343,14 @@ type CPU struct {
 	AllCycles uint64 // total number of cycles of CPU instance
 	Cycles    byte   // number of cycles for this step
 	stepPC    uint16 // how many bytes should PC be increased in this step?
-	abort     bool   // temporary flag to determine that cpu should stop
 	Stopped   bool   // set after STP instruction is executed
 
 	// previous register's value exists for debugging purposes
 	PRK byte   // previous value of program banK register
 	PPC uint16 // previous value Program Counter
 	WDM byte   // argument WDM command, for debugging purposes
+
+	OnWDM func(wdm byte)
 
 	// 65c816 registers
 	PC uint16 // Program Counter
@@ -415,7 +416,6 @@ func (cpu *CPU) Reset() {
 	//cpu.PC   = cpu.Read16(0xFFFC)
 	cpu.PC = cpu.nRead16_cross(0x00, 0xFFFC)
 	cpu.SetFlags(0x34)
-	cpu.abort = false
 	cpu.Stopped = false
 }
 
@@ -1090,12 +1090,7 @@ func (cpu *CPU) Step() (int, bool) {
 	if cpu.Stopped {
 		return int(cpu.Cycles), true
 	}
-	if cpu.abort {
-		cpu.abort = false
-		return int(cpu.Cycles), true
-	} else {
-		return int(cpu.Cycles), false
-	}
+	return int(cpu.Cycles), false
 }
 
 // NMI - Non-Maskable Interrupt
@@ -2345,7 +2340,12 @@ func (cpu *CPU) wai() {
 //         >=10 are interpreted by emulator
 func (cpu *CPU) op_wdm() {
 	cpu.WDM = cpu.cmdRead()
-	cpu.abort = true
+
+	// invoke callback:
+	onWDM := cpu.OnWDM
+	if onWDM != nil {
+		onWDM(cpu.WDM)
+	}
 }
 
 // XBA - eXchange B and A accumulator
