@@ -919,3 +919,7 @@ func (a *Emitter) WDM(m uint8) {
 func (a *Emitter) CLC() {
 	a.emit1("clc", [1]byte{0x18})
 }
+
+func (a *Emitter) STP() {
+	a.emit1("stp", [1]byte{0xDB})
+}
