@@ -511,9 +511,7 @@ func (cpu *CPU) cmdRead16() uint16 {
 		m_Absolute_Y,
 		m_Absolute_X_Indirect,
 		m_Stack_Relative_Indirect_Y:
-		ll := cpu.Bus.EaRead(cpu.StepInfo.EA) // todo - zastapic to jakos?
-		hh := cpu.Bus.EaRead(cpu.StepInfo.EA + 1)
-		return uint16(hh)<<8 | uint16(ll)
+		return cpu.Bus.eaRead16_cross(cpu.StepInfo.EA)
 
 	case m_Absolute,
 		m_DP_X_Indirect,
@@ -570,10 +568,7 @@ func (cpu *CPU) cmdWrite16(value uint16) {
 		m_Absolute_X,
 		m_Absolute_Y,
 		m_Stack_Relative_Indirect_Y:
-		ll := byte(value)
-		hh := byte(value >> 8)
-		cpu.Bus.EaWrite(cpu.StepInfo.EA, ll)
-		cpu.Bus.EaWrite(cpu.StepInfo.EA+1, hh)
+		cpu.Bus.eaWrite16_cross(cpu.StepInfo.EA, value)
 
 	case m_Absolute,
 		m_DP_X_Indirect,
