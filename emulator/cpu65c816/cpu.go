@@ -351,6 +351,7 @@ type CPU struct {
 	WDM byte   // argument WDM command, for debugging purposes
 
 	OnWDM func(wdm byte)
+	OnPC  map[uint32]func()
 
 	// 65c816 registers
 	PC uint16 // Program Counter
@@ -835,6 +836,10 @@ func (cpu *CPU) Step() (int, bool) {
 	//}
 
 	//cycles := cpu.Cycles
+
+	if cb, ok := cpu.OnPC[uint32(cpu.RK)<<16|uint32(cpu.PC)]; ok {
+		cb()
+	}
 
 	switch cpu.Interrupt {
 	case interruptNMI:
