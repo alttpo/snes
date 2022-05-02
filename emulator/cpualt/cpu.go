@@ -396,7 +396,6 @@ func (cpu *CPU) Init() {
 
 func (cpu *CPU) InitFrom(other *CPU) {
 	*cpu = *other
-	cpu.Bus.Init()
 	cpu.createTable()
 }
 
