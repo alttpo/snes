@@ -61,9 +61,17 @@ func PakAddressToBus(pakAddr uint32) (busAddr uint32, err error) {
 		// like VRAM, CGRAM, OAM, etc.:
 		busAddr = ((pakAddr - 0xF50000) & 0x01FFFF) + 0x7E0000
 		return
-	} else if pakAddr >= 0xE00000 && pakAddr < 0xF00000 {
-		// SRAM is a little more complex, but not much:
-		// bank $F0-$FF, $0000-$7FFF
+	} else if pakAddr >= 0xE00000 && pakAddr < 0xEE0000 {
+		// SRAM first $E banks:
+		// bank $70-$7D, $0000-$7FFF
+		busAddr = (pakAddr - 0xE00000) & 0x07FFFF
+		offs := busAddr & 0x7FFF
+		bank := busAddr >> 15
+		busAddr = ((0x70 + bank) << 16) + offs
+		return
+	} else if pakAddr >= 0xEE0000 && pakAddr < 0xF00000 {
+		// SRAM last two banks:
+		// bank $FE-$FF, $0000-$7FFF
 		busAddr = (pakAddr - 0xE00000) & 0x07FFFF
 		offs := busAddr & 0x7FFF
 		bank := busAddr >> 15
