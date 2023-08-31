@@ -268,6 +268,10 @@ func (a *Emitter) addDanglingU16(label string) {
 	a.danglingU16[label] = refs
 }
 
+func (a *Emitter) Cap() int {
+	return len(a.code)
+}
+
 func (a *Emitter) Len() int {
 	//return a.code.Len()
 	//return int(a.address) - int(a.base)
@@ -437,19 +441,33 @@ func (a *Emitter) EmitBytes(b []byte) {
 	if a.generateText {
 		a.emitBase()
 		s := strings.Builder{}
+		s.WriteString("db ")
 		blen := len(b)
-		for i, v := range b {
-			s.Write([]byte{'$', hextable[(v>>4)&0xF], hextable[v&0xF]})
-			if i < blen-1 {
-				s.Write([]byte{',', ' '})
-			}
-		}
-		a.lines = append(a.lines, asmLine{
+		cl := asmLine{
 			asmLineType: lineDB,
 			address:     a.address,
-			ins:         s.String(),
+			ins:         "",
 			argsFormat:  "",
-		})
+		}
+		for i, v := range b {
+			s.Write([]byte{'$', hextable[(v>>4)&0xF], hextable[v&0xF]})
+			if i&15 == 15 {
+				cl.ins = s.String()
+				a.lines = append(a.lines, cl)
+				s.Reset()
+				s.WriteString("db ")
+				cl.ins = ""
+				cl.address = a.address + uint32(i) + 1
+			} else if i < blen-1 {
+				s.Write([]byte{',', ' '})
+				continue
+			}
+		}
+
+		if s.Len() > len("db ") {
+			cl.ins = s.String()
+			a.lines = append(a.lines, cl)
+		}
 	}
 	_, _ = a.write(b)
 	a.address += uint32(len(b))
