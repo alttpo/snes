@@ -168,11 +168,13 @@ func (c *CPU) formatInstructionMode(mode byte, w0 byte, w1 byte, w2 byte, w3 byt
 // XXX - create disassemble line
 func (c *CPU) DisassemblePreviousPC(w io.Writer) {
 	//fmt.Fprintf(w, "\n%s", c.Disassemble(c.PPC))
+	_, _ = w.Write([]byte{'\n'})
 	c.DisassembleTo(c.PPC, w)
 }
 
 func (c *CPU) DisassembleCurrentPC(w io.Writer) {
 	//fmt.Fprintf(w, "\n%s", c.Disassemble(c.PC))
+	_, _ = w.Write([]byte{'\n'})
 	c.DisassembleTo(c.PC, w)
 }
 
