@@ -42,7 +42,6 @@ type busEntry struct {
 
 // implement variant 1 - static table of 2^20 pointers to 16-bytes segments
 // simplest, fastest and with greater memory usage
-//
 type Bus struct {
 	EA      uint32                 // last memory access - r/w
 	Write   bool                   // is write op?

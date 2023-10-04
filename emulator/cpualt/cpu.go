@@ -69,8 +69,6 @@ const (
 	m_Stack_Relative_Indirect_Y // ($32, S), Y    - p. 325 or 5.21  (STACK,S),Y
 )
 
-//
-//
 func (c *CPU) createTable() {
 	c.instructions = [256]instructionType{
 		{0x00, "brk", m_Implied, 1, 8, c.op_brk},                   // BRK
@@ -2278,7 +2276,8 @@ func (cpu *CPU) wai() {
 // WDM - William D. Mensch, Jr.
 //
 // values: 0-9  increase counter
-//         >=10 are interpreted by emulator
+//
+//	>=10 are interpreted by emulator
 func (cpu *CPU) op_wdm() {
 	cpu.WDM = cpu.cmdRead()
 

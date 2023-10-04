@@ -34,6 +34,49 @@ func (b *Bus) AttachWriter(start, end uint32, w BusWriter) {
 	}
 }
 
+func (b *Bus) Read8(addr uint32) uint8 {
+	return b.Read[addr>>4](addr)
+}
+
+func (b *Bus) Read16(addr uint32) uint16 {
+	l := b.Read[addr>>4](addr)
+	addr++
+	h := b.Read[addr>>4](addr)
+	return uint16(h)<<8 | uint16(l)
+}
+
+func (b *Bus) Read24(addr uint32) uint32 {
+	l := b.Read[addr>>4](addr)
+	addr++
+	h := b.Read[addr>>4](addr)
+	addr++
+	k := b.Read[addr>>4](addr)
+	return uint32(k)<<16 | uint32(h)<<8 | uint32(l)
+}
+
+func (b *Bus) Write8(addr uint32, value uint8) {
+	b.Write[addr>>4](addr, value)
+}
+
+func (b *Bus) Write16(addr uint32, value uint16) {
+	l := uint8(value & 0xFF)
+	b.Write[addr>>4](addr, l)
+	addr++
+	h := uint8(value >> 8 & 0xFF)
+	b.Write[addr>>4](addr, h)
+}
+
+func (b *Bus) Write24(addr uint32, value uint32) {
+	l := uint8(value & 0xFF)
+	b.Write[addr>>4](addr, l)
+	addr++
+	h := uint8(value >> 8 & 0xFF)
+	b.Write[addr>>4](addr, h)
+	addr++
+	k := uint8(value >> 16 & 0xFF)
+	b.Write[addr>>4](addr, k)
+}
+
 func (b *Bus) EaRead(addr uint32) uint8 {
 	b.M = b.Read[addr>>4](addr)
 	return b.M
