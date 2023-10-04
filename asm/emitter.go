@@ -649,6 +649,13 @@ func (a *Emitter) CMP_imm16_w(m uint16) {
 	a.emit3("cmp.w", "#$%02[2]x%02[1]x", d)
 }
 
+func (a *Emitter) CMP_long(addr uint32) {
+	var d [4]byte
+	d[0] = 0xCF
+	d[1], d[2], d[3] = imm24(addr)
+	a.emit4("cmp.l", "$%02[3]x%02[2]x%02[1]x", d)
+}
+
 func (a *Emitter) BNE_imm8(m int8) {
 	var d [2]byte
 	d[0] = 0xD0
@@ -907,6 +914,16 @@ func (a *Emitter) LDY_imm16_w(m uint16) {
 	a.emit3("ldy.w", "#$%02[2]x%02[1]x", d)
 }
 
+func (a *Emitter) LDY_imm8_b(m uint8) {
+	if a.IsX16bit() {
+		panic(fmt.Errorf("asm: LDY_imm8_b called but 'x' flag is 16-bit; call SEP(0x10) or AssumeSEP(0x10) first"))
+	}
+	var d [2]byte
+	d[0] = 0xA0
+	d[1] = m
+	a.emit2("ldy.b", "#$%02[1]x", d)
+}
+
 func (a *Emitter) MVN(destBank uint8, srcBank uint8) {
 	var d [3]byte
 	d[0] = 0x54
@@ -940,4 +957,8 @@ func (a *Emitter) CLC() {
 
 func (a *Emitter) STP() {
 	a.emit1("stp", [1]byte{0xDB})
+}
+
+func (a *Emitter) TXA() {
+	a.emit1("txa", [1]byte{0x8A})
 }
