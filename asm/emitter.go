@@ -698,6 +698,27 @@ func (a *Emitter) BPL(label string) {
 	a.emit2Label("bpl", label, d)
 }
 
+func (a *Emitter) BMI(label string) {
+	var d [2]byte
+	d[0] = 0x30
+	d[1] = 0xFF // will be overwritten by Finalize()
+	a.emit2Label("bmi", label, d)
+}
+
+func (a *Emitter) BCC(label string) {
+	var d [2]byte
+	d[0] = 0x90
+	d[1] = 0xFF // will be overwritten by Finalize()
+	a.emit2Label("bcc", label, d)
+}
+
+func (a *Emitter) BCS(label string) {
+	var d [2]byte
+	d[0] = 0xB0
+	d[1] = 0xFF // will be overwritten by Finalize()
+	a.emit2Label("bcs", label, d)
+}
+
 func (a *Emitter) BRA_imm8(m int8) {
 	var d [2]byte
 	d[0] = 0x80
