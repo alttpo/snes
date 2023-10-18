@@ -174,9 +174,13 @@ func (s *System) RunUntil(targetPC uint32, maxCycles uint64) bool {
 		reserver.Reserve(40 * n / 2)
 	}
 
+	var oa [100]byte
+
 	for cycles := uint64(0); cycles < maxCycles; {
 		if s.Logger != nil {
-			s.CPU.DisassembleCurrentPC(s.Logger)
+			o := oa[:0]
+			o = s.CPU.DisassembleCurrentPC(o)
+			_, _ = s.Logger.Write(o)
 		}
 		if s.GetPC() == targetPC {
 			break
