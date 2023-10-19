@@ -26,6 +26,11 @@ func (b *B) X04(d uint16) *B {
 	return b
 }
 
+func (b *B) X06(d uint32) *B {
+	*b = append(*b, hexdigits[d>>20&0xF], hexdigits[d>>16&0xF], hexdigits[d>>12&0xF], hexdigits[d>>8&0xF], hexdigits[d>>4&0xF], hexdigits[d&0xF])
+	return b
+}
+
 func (b *B) S(s string) *B {
 	sb := []byte(s)
 	for i := 0; i < len(sb); i++ {
@@ -43,10 +48,8 @@ func (b *B) Sb(sb []byte) *B {
 
 func (b *B) Sn(s string, n int) *B {
 	sb := []byte(s)
-	if n <= len(sb) {
-		for i := 0; i < n; i++ {
-			*b = append(*b, sb[i])
-		}
+	for i := 0; i < len(sb); i++ {
+		*b = append(*b, sb[i])
 	}
 	if n > len(sb) {
 		for i := len(sb); i < n; i++ {
