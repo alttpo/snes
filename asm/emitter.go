@@ -3,6 +3,7 @@ package asm
 import (
 	"encoding/binary"
 	"fmt"
+	"github.com/alttpo/snes/xbuf"
 	"io"
 	"strings"
 )
@@ -137,51 +138,79 @@ func (a *Emitter) WriteTextTo(w io.Writer) (err error) {
 
 	for _, line := range a.lines {
 		offs := line.address - a.base
+
+		oa := [80]byte{}
+		xb := xbuf.B(oa[:0])
 		switch line.asmLineType {
 		case lineBase:
-			_, err = fmt.Fprintf(w, "base $%06x\n", line.address)
+			//_, err = fmt.Fprintf(w, "base $%06x\n", line.address)
+			xb.S("base $").X06(line.address)
 		case lineComment:
-			_, err = fmt.Fprintf(w, "    ; %s\n", line.ins)
+			//_, err = fmt.Fprintf(w, "    ; %s\n", line.ins)
+			xb.S("    ; ").S(line.ins)
 		case lineLabel:
 			label := line.label
-			_, err = fmt.Fprintf(w, "%s:\n", label)
+			//_, err = fmt.Fprintf(w, "%s:\n", label)
+			xb.S(label).C(':')
 		case lineDB:
-			_, err = fmt.Fprintf(w, "    ; $%06x\n    %s\n", line.address, line.ins)
+			//_, err = fmt.Fprintf(w, "    ; $%06x\n    %s\n", line.address, line.ins)
+			xb.S("    ; $").X06(line.address).C('\n')
+			xb.S("    ").S(line.ins)
 		case lineIns1:
 			d := a.code[offs : offs+1]
-			_, err = fmt.Fprintf(w, "    %-5s %-12s ; $%06x  %02x\n", line.ins, "", line.address, d[0])
+			//_, err = fmt.Fprintf(w, "    %-5s %-12s ; $%06x  %02x\n", line.ins, "", line.address, d[0])
+			xb.S("    ").Sn(line.ins, 5).C(' ').Sn("", 12)
+			xb.S(" ; $").X06(line.address).S("  ").X02(d[0])
 		case lineIns2:
 			d := a.code[offs : offs+2]
 			args := fmt.Sprintf(line.argsFormat, d[1])
-			_, err = fmt.Fprintf(w, "    %-5s %-12s ; $%06x  %02x %02x\n", line.ins, args, line.address, d[0], d[1])
+			//_, err = fmt.Fprintf(w, "    %-5s %-12s ; $%06x  %02x %02x\n", line.ins, args, line.address, d[0], d[1])
+			xb.S("    ").Sn(line.ins, 5).C(' ').Sn(args, 12)
+			xb.S(" ; $").X06(line.address).S("  ").X02(d[0]).C(' ').X02(d[1])
 		case lineIns2Label:
 			d := a.code[offs : offs+2]
 			label := line.label
 			if _, ok := a.danglingS8[label]; ok {
 				// warn about dangling label references:
-				_, err = fmt.Fprintf(w, "!!  %-5s %-12s ; $%06x  %02x %02x  !! ERROR: undefined label '%s'\n", line.ins, label, line.address, d[0], d[1], label)
+				//_, err = fmt.Fprintf(w, "!!  %-5s %-12s ; $%06x  %02x %02x  !! ERROR: undefined label '%s'\n", line.ins, label, line.address, d[0], d[1], label)
+				xb.S("!!  ").Sn(line.ins, 5).C(' ').Sn(label, 12)
+				xb.S(" ; $").X06(line.address).S("  ").X02(d[0]).C(' ').X02(d[1])
+				xb.S("  !! ERROR: undefined label '").S(label).S("'")
 			} else {
-				_, err = fmt.Fprintf(w, "    %-5s %-12s ; $%06x  %02x %02x\n", line.ins, label, line.address, d[0], d[1])
+				//_, err = fmt.Fprintf(w, "    %-5s %-12s ; $%06x  %02x %02x\n", line.ins, label, line.address, d[0], d[1])
+				xb.S("    ").Sn(line.ins, 5).C(' ').Sn(label, 12)
+				xb.S(" ; $").X06(line.address).S("  ").X02(d[0]).C(' ').X02(d[1])
 			}
 		case lineIns3:
 			d := a.code[offs : offs+3]
 			args := fmt.Sprintf(line.argsFormat, d[1], d[2])
-			_, err = fmt.Fprintf(w, "    %-5s %-12s ; $%06x  %02x %02x %02x\n", line.ins, args, line.address, d[0], d[1], d[2])
+			//_, err = fmt.Fprintf(w, "    %-5s %-12s ; $%06x  %02x %02x %02x\n", line.ins, args, line.address, d[0], d[1], d[2])
+			xb.S("    ").Sn(line.ins, 5).C(' ').Sn(args, 12)
+			xb.S(" ; $").X06(line.address).S("  ").X02(d[0]).C(' ').X02(d[1]).C(' ').X02(d[2])
 		case lineIns3Label:
 			d := a.code[offs : offs+3]
 			label := line.label
 			args := fmt.Sprintf(line.argsFormat, label)
 			if _, ok := a.danglingU16[label]; ok {
-				_, err = fmt.Fprintf(w, "!!  %-5s %-12s ; $%06x  %02x %02x %02x  !! ERROR: undefined label '%s'\n", line.ins, args, line.address, d[0], d[1], d[2], label)
+				//_, err = fmt.Fprintf(w, "!!  %-5s %-12s ; $%06x  %02x %02x %02x  !! ERROR: undefined label '%s'\n", line.ins, args, line.address, d[0], d[1], d[2], label)
+				xb.S("!!  ").Sn(line.ins, 5).C(' ').Sn(args, 12)
+				xb.S(" ; $").X06(line.address).S("  ").X02(d[0]).C(' ').X02(d[1]).C(' ').X02(d[2])
+				xb.S("  !! ERROR: undefined label '").S(label).S("'")
 			} else {
-				_, err = fmt.Fprintf(w, "    %-5s %-12s ; $%06x  %02x %02x %02x\n", line.ins, args, line.address, d[0], d[1], d[2])
+				//_, err = fmt.Fprintf(w, "    %-5s %-12s ; $%06x  %02x %02x %02x\n", line.ins, args, line.address, d[0], d[1], d[2])
+				xb.S("    ").Sn(line.ins, 5).C(' ').Sn(args, 12)
+				xb.S(" ; $").X06(line.address).S("  ").X02(d[0]).C(' ').X02(d[1]).C(' ').X02(d[2])
 			}
 		case lineIns4:
 			d := a.code[offs : offs+4]
 			args := fmt.Sprintf(line.argsFormat, d[1], d[2], d[3])
-			_, err = fmt.Fprintf(w, "    %-5s %-12s ; $%06x  %02x %02x %02x %02x\n", line.ins, args, line.address, d[0], d[1], d[2], d[3])
+			//_, err = fmt.Fprintf(w, "    %-5s %-12s ; $%06x  %02x %02x %02x %02x\n", line.ins, args, line.address, d[0], d[1], d[2], d[3])
+			xb.S("    ").Sn(line.ins, 5).C(' ').Sn(args, 12)
+			xb.S(" ; $").X06(line.address).S("  ").X02(d[0]).C(' ').X02(d[1]).C(' ').X02(d[2]).C(' ').X02(d[3])
 		}
 
+		xb.C('\n')
+		_, err = w.Write(xb)
 		if err != nil {
 			return
 		}
