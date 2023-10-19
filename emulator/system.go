@@ -9,7 +9,7 @@ import (
 
 type System struct {
 	// emulated system:
-	Bus *bus.Bus
+	Bus bus.Bus
 	CPU *cpu65c816.CPU
 
 	ROM  [0x1000000]byte
@@ -28,10 +28,8 @@ type Reserver interface {
 }
 
 func (s *System) CreateEmulator() (err error) {
-	// create primary A bus for SNES:
-	s.Bus, _ = bus.NewWithSizeHint(0x40*2 + 0x10*2 + 1 + 0x70 + 0x80 + 0x70*2)
 	// Create CPU:
-	s.CPU, _ = cpu65c816.New(s.Bus)
+	s.CPU, _ = cpu65c816.New(&s.Bus)
 
 	// map in ROM to Bus; parts of this mapping will be overwritten:
 	for b := uint32(0); b < 0x40; b++ {

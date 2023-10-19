@@ -12,13 +12,6 @@ import (
 	"github.com/alttpo/snes/emulator/memory"
 )
 
-type busEntry struct {
-	mem   memory.Memory
-	name  string
-	start uint32
-	end   uint32
-}
-
 // original algorithm was built around array of busEntry segments.
 // iterating over declared segments gives us a smallest memory usage
 // at expense of O(n) cost when number of declared segments (n) grows
@@ -46,7 +39,6 @@ type Bus struct {
 	EA      uint32                 // last memory access - r/w
 	Write   bool                   // is write op?
 	segment [1048576]memory.Memory // 2^10 because segments are 4bits length
-	entries []busEntry
 }
 
 func (b *Bus) String() string {
@@ -59,18 +51,7 @@ func (b *Bus) Clear() {
 
 func New() (*Bus, error) {
 	b := &Bus{}
-	b.Init(10)
 	return b, nil
-}
-
-func NewWithSizeHint(cap int) (*Bus, error) {
-	b := &Bus{}
-	b.Init(cap)
-	return b, nil
-}
-
-func (b *Bus) Init(cap int) {
-	b.entries = make([]busEntry, 0, cap)
 }
 
 // There are two variants possible:
@@ -94,18 +75,8 @@ func (b *Bus) Attach(mem memory.Memory, name string, start uint32, end uint32) e
 	}
 	//fmt.Printf("0x3ffff: %v\n", b.segment[0x3ffff>>4])
 
-	entry := busEntry{mem: mem, name: name, start: start, end: end}
 	//mylog.Logger.Log(fmt.Sprintf("bus attach: %-20v %06x %06x", mem, start, end))
-	b.entries = append(b.entries, entry)
 	return nil
-}
-
-// Shutdown tells the address bus a shutdown is occurring, and to pass the
-// message on to subordinates.
-func (b *Bus) Shutdown() {
-	for _, be := range b.entries {
-		be.mem.Shutdown()
-	}
 }
 
 // Read returns the byte from memory mapped to the given address.
