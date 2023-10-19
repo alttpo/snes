@@ -5,70 +5,15 @@
 package cpu65c816
 
 import (
-	"strconv"
+	"github.com/alttpo/snes/xbuf"
 )
 
-const hexdigits = "0123456789abcdef"
-
-type xbuf []byte
-
-func (b *xbuf) Db(cycles byte) *xbuf {
-	*b = strconv.AppendInt(*b, int64(cycles), 10)
-	return b
-}
-
-func (b *xbuf) C(d byte) *xbuf {
-	*b = append(*b, d)
-	return b
-}
-
-func (b *xbuf) X02(d uint8) *xbuf {
-	*b = append(*b, hexdigits[d>>4&0xF], hexdigits[d&0xF])
-	return b
-}
-
-func (b *xbuf) X04(d uint16) *xbuf {
-	*b = append(*b, hexdigits[d>>12&0xF], hexdigits[d>>8&0xF], hexdigits[d>>4&0xF], hexdigits[d&0xF])
-	return b
-}
-
-func (b *xbuf) S(s string) *xbuf {
-	sb := []byte(s)
-	for i := 0; i < len(sb); i++ {
-		*b = append(*b, sb[i])
-	}
-	return b
-}
-
-func (b *xbuf) Sb(sb []byte) *xbuf {
-	for i := 0; i < len(sb); i++ {
-		*b = append(*b, sb[i])
-	}
-	return b
-}
-
-func (b *xbuf) Sn(s string, n int) *xbuf {
-	sb := []byte(s)
-	if n <= len(sb) {
-		for i := 0; i < n; i++ {
-			*b = append(*b, sb[i])
-		}
-	}
-	if n > len(sb) {
-		for i := len(sb); i < n; i++ {
-			*b = append(*b, ' ')
-		}
-	}
-	return b
-}
-
-func appendCPUFlags(o xbuf, flag byte, name byte) xbuf {
+func appendCPUFlags(xb *xbuf.B, flag byte, name byte) {
 	if flag > 0 {
-		o.C(name)
+		xb.C(name)
 	} else {
-		o.C('-')
+		xb.C('-')
 	}
-	return o
 }
 
 func (c *CPU) DisassembleCurrentPC(o []byte) []byte {
@@ -77,7 +22,7 @@ func (c *CPU) DisassembleCurrentPC(o []byte) []byte {
 }
 
 func (c *CPU) DisassembleTo(myPC uint16, o []byte) []byte {
-	xb := xbuf(o)
+	xb := xbuf.B(o)
 
 	//var myPC uint16 = c.PC
 
@@ -109,7 +54,7 @@ func (c *CPU) DisassembleTo(myPC uint16, o []byte) []byte {
 		//	c.Cycles, c.RK, myPC, w0, w1, w2, w3, name)
 		xb.X02(w0).C(' ').X02(w1).C(' ').X02(w2).C(' ').X02(w3)
 		xb.C('|').Sn(name, 3).C(' ')
-		xb = c.formatInstructionModeTo(xb, mode, w0, w1, w2, w3)
+		c.formatInstructionModeTo(&xb, mode, w0, w1, w2, w3)
 	case 3:
 		w0 := c.nRead(c.RK, myPC+0)
 		w1 := c.nRead(c.RK, myPC+1)
@@ -118,7 +63,7 @@ func (c *CPU) DisassembleTo(myPC uint16, o []byte) []byte {
 		//	c.Cycles, c.RK, myPC, w0, w1, w2, name)
 		xb.X02(w0).C(' ').X02(w1).C(' ').X02(w2).S("   ")
 		xb.C('|').Sn(name, 3).C(' ')
-		xb = c.formatInstructionModeTo(xb, mode, w0, w1, w2, 0)
+		c.formatInstructionModeTo(&xb, mode, w0, w1, w2, 0)
 	case 2:
 		w0 := c.nRead(c.RK, myPC+0)
 		w1 := c.nRead(c.RK, myPC+1)
@@ -126,20 +71,20 @@ func (c *CPU) DisassembleTo(myPC uint16, o []byte) []byte {
 		//	c.Cycles, c.RK, myPC, w0, w1, name)
 		xb.X02(w0).C(' ').X02(w1).S("      ")
 		xb.C('|').Sn(name, 3).C(' ')
-		xb = c.formatInstructionModeTo(xb, mode, w0, w1, 0, 0)
+		c.formatInstructionModeTo(&xb, mode, w0, w1, 0, 0)
 	case 1:
 		w0 := c.nRead(c.RK, myPC+0)
 		//o = fmt.Appendf(o, "%d\t%02x:%04x│%02x         │%3s ",
 		//	c.Cycles, c.RK, myPC, w0, name)
 		xb.X02(w0).S("         ")
 		xb.C('|').Sn(name, 3).C(' ')
-		xb = c.formatInstructionModeTo(xb, mode, w0, 0, 0, 0)
+		c.formatInstructionModeTo(&xb, mode, w0, 0, 0, 0)
 	default:
 		//o = fmt.Appendf(o, "%d\t%02x:%04x│err: cmd len %d│%3s ",
 		//	c.Cycles, c.RK, myPC, bytes, name)
 		xb.S("???        ")
 		xb.C('|').Sn(name, 3).C(' ')
-		xb = c.formatInstructionModeTo(xb, mode, 0, 0, 0, 0)
+		c.formatInstructionModeTo(&xb, mode, 0, 0, 0, 0)
 	}
 	xb.C('|')
 
@@ -162,14 +107,14 @@ func (c *CPU) DisassembleTo(myPC uint16, o []byte) []byte {
 	}
 
 	xb.C(' ')
-	xb = appendCPUFlags(xb, c.N, 'N')
-	xb = appendCPUFlags(xb, c.V, 'V')
-	xb = appendCPUFlags(xb, c.M, 'M')
-	xb = appendCPUFlags(xb, c.X, 'X')
-	xb = appendCPUFlags(xb, c.D, 'D')
-	xb = appendCPUFlags(xb, c.I, 'I')
-	xb = appendCPUFlags(xb, c.Z, 'Z')
-	xb = appendCPUFlags(xb, c.C, 'C')
+	appendCPUFlags(&xb, c.N, 'N')
+	appendCPUFlags(&xb, c.V, 'V')
+	appendCPUFlags(&xb, c.M, 'M')
+	appendCPUFlags(&xb, c.X, 'X')
+	appendCPUFlags(&xb, c.D, 'D')
+	appendCPUFlags(&xb, c.I, 'I')
+	appendCPUFlags(&xb, c.Z, 'Z')
+	appendCPUFlags(&xb, c.C, 'C')
 	xb.C('\n')
 
 	return xb
@@ -177,7 +122,7 @@ func (c *CPU) DisassembleTo(myPC uint16, o []byte) []byte {
 
 var spaces = [13]byte{' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '}
 
-func (c *CPU) formatInstructionModeTo(xb xbuf, mode byte, w0 byte, w1 byte, w2 byte, w3 byte) xbuf {
+func (c *CPU) formatInstructionModeTo(xb *xbuf.B, mode byte, w0 byte, w1 byte, w2 byte, w3 byte) {
 	switch mode {
 	case m_Absolute: // $9876       - p. 288 or 5.2
 		//o = fmt.Appendf(o, "$%02x%02x", w2, w1)
@@ -285,6 +230,4 @@ func (c *CPU) formatInstructionModeTo(xb xbuf, mode byte, w0 byte, w1 byte, w2 b
 		//o = fmt.Appendf(o, "! unknown !")
 		xb.S("! unknown !").Sb(spaces[11:13])
 	}
-
-	return xb
 }
