@@ -139,7 +139,7 @@ func (a *Emitter) WriteTextTo(w io.Writer) (err error) {
 	for _, line := range a.lines {
 		offs := line.address - a.base
 
-		oa := [80]byte{}
+		var oa [120]byte
 		xb := xbuf.B(oa[:0])
 		switch line.asmLineType {
 		case lineBase:
