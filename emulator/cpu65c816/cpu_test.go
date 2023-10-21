@@ -110,7 +110,7 @@ func createSNES() (s *snes, err error) {
 	s = &snes{}
 
 	// create primary A bus for SNES:
-	s.Bus, err = bus.NewWithSizeHint(0x40*2 + 0x10*2 + 1 + 0x70 + 0x80 + 0x70*2)
+	s.Bus, err = bus.New()
 	// Create CPU:
 	s.CPU, err = New(s.Bus)
 

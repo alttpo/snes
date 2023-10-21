@@ -19,7 +19,7 @@ type instructionType struct {
 	mode   byte
 	size   byte
 	cycles byte
-	proc   func()
+	proc   func(cpu *CPU)
 }
 
 const CPUFrequency = 14000000 // 14MHz. XXX - fix it and move to platform?
@@ -71,265 +71,263 @@ const (
 	m_Stack_Relative_Indirect_Y // ($32, S), Y    - p. 325 or 5.21  (STACK,S),Y
 )
 
-func (c *CPU) createTable() {
-	c.instructions = [256]instructionType{
-		{0x00, "brk", m_Implied, 1, 8, c.op_brk},                   // BRK
-		{0x01, "ora", m_DP_X_Indirect, 2, 7, c.op_ora},             // ORA ($10,X)
-		{0x02, "cop", m_Immediate, 2, 8, c.op_cop},                 // COP #$12
-		{0x03, "ora", m_Stack_Relative, 2, 5, c.op_ora},            // ORA $32,S
-		{0x04, "tsb", m_DP, 2, 7, c.op_tsb},                        // TSB $10
-		{0x05, "ora", m_DP, 2, 4, c.op_ora},                        // ORA $10
-		{0x06, "asl", m_DP, 2, 7, c.op_asl},                        // ASL $10
-		{0x07, "ora", m_DP_Indirect_Long, 2, 7, c.op_ora},          // ORA [$10]
-		{0x08, "php", m_Implied, 1, 3, c.op_php},                   // PHP
-		{0x09, "ora", m_Immediate_flagM, 3, 3, c.op_ora},           // ORA #$54
-		{0x0a, "asl", m_Accumulator, 1, 2, c.op_asl},               // ASL
-		{0x0b, "phd", m_Implied, 1, 4, c.op_phd},                   // PHD
-		{0x0c, "tsb", m_Absolute, 3, 8, c.op_tsb},                  // TSB $9876
-		{0x0d, "ora", m_Absolute, 3, 5, c.op_ora},                  // ORA $9876
-		{0x0e, "asl", m_Absolute, 3, 8, c.op_asl},                  // ASL $9876
-		{0x0f, "ora", m_Absolute_Long, 4, 6, c.op_ora},             // ORA $FEDBCA
-		{0x10, "bpl", m_PC_Relative, 2, 2, c.op_bpl},               // BPL LABEL
-		{0x11, "ora", m_DP_Indirect_Y, 2, 7, c.op_ora},             // ORA ($10),Y
-		{0x12, "ora", m_DP_Indirect, 2, 6, c.op_ora},               // ORA ($10)
-		{0x13, "ora", m_Stack_Relative_Indirect_Y, 2, 8, c.op_ora}, // ORA ($32,S),Y
-		{0x14, "trb", m_DP, 2, 7, c.op_trb},                        // TRB $10
-		{0x15, "ora", m_DP_X, 2, 5, c.op_ora},                      // ORA $10,X
-		{0x16, "asl", m_DP_X, 2, 8, c.op_asl},                      // ASL $10,X
-		{0x17, "ora", m_DP_Indirect_Long_Y, 2, 7, c.op_ora},        // ORA [$10],Y
-		{0x18, "clc", m_Implied, 1, 2, c.op_clc},                   // CLC
-		{0x19, "ora", m_Absolute_Y, 3, 6, c.op_ora},                // ORA $9876,Y
-		{0x1a, "inc", m_Accumulator, 1, 2, c.op_inc},               // INC
-		{0x1b, "tcs", m_Implied, 1, 2, c.op_tcs},                   // TCS
-		{0x1c, "trb", m_Absolute, 3, 8, c.op_trb},                  // TRB $9876
-		{0x1d, "ora", m_Absolute_X, 3, 6, c.op_ora},                // ORA $9876,X
-		{0x1e, "asl", m_Absolute_X, 3, 9, c.op_asl},                // ASL $9876,X
-		{0x1f, "ora", m_Absolute_Long_X, 4, 6, c.op_ora},           // ORA $FEDCBA,X
-		{0x20, "jsr", m_Absolute, 3, 6, c.op_jsr},                  // JSR $1234
-		{0x21, "and", m_DP_X_Indirect, 2, 7, c.op_and},             // AND ($10,X)
-		{0x22, "jsl", m_Absolute_Long, 4, 8, c.op_jsl},             // JSL $123456
-		{0x23, "and", m_Stack_Relative, 2, 5, c.op_and},            // AND $32,S
-		{0x24, "bit", m_DP, 2, 4, c.op_bit},                        // BIT $10
-		{0x25, "and", m_DP, 2, 4, c.op_and},                        // AND $10
-		{0x26, "rol", m_DP, 2, 7, c.op_rol},                        // ROL $10
-		{0x27, "and", m_DP_Indirect_Long, 2, 7, c.op_and},          // AND [$10]
-		{0x28, "plp", m_Implied, 1, 4, c.op_plp},                   // PLP
-		{0x29, "and", m_Immediate_flagM, 3, 3, c.op_and},           // AND #$54
-		{0x2a, "rol", m_Accumulator, 1, 2, c.op_rol},               // ROL
-		{0x2b, "pld", m_Implied, 1, 5, c.op_pld},                   // PLD
-		{0x2c, "bit", m_Absolute, 3, 5, c.op_bit},                  // BIT $9876
-		{0x2d, "and", m_Absolute, 3, 5, c.op_and},                  // AND $9876
-		{0x2e, "rol", m_Absolute, 3, 8, c.op_rol},                  // ROL $9876
-		{0x2f, "and", m_Absolute_Long, 4, 6, c.op_and},             // AND $FEDBCA
-		{0x30, "bmi", m_PC_Relative, 2, 2, c.op_bmi},               // BMI LABEL
-		{0x31, "and", m_DP_Indirect_Y, 2, 7, c.op_and},             // AND ($10),Y
-		{0x32, "and", m_DP_Indirect, 2, 6, c.op_and},               // AND ($10)
-		{0x33, "and", m_Stack_Relative_Indirect_Y, 2, 8, c.op_and}, // AND ($32,S),Y
-		{0x34, "bit", m_DP_X, 2, 5, c.op_bit},                      // BIT $10,X
-		{0x35, "and", m_DP_X, 2, 5, c.op_and},                      // AND $10,X
-		{0x36, "rol", m_DP_X, 2, 8, c.op_rol},                      // ROL $10,X
-		{0x37, "and", m_DP_Indirect_Long_Y, 2, 7, c.op_and},        // AND [$10],Y
-		{0x38, "sec", m_Implied, 1, 2, c.op_sec},                   // SEC
-		{0x39, "and", m_Absolute_Y, 3, 6, c.op_and},                // AND $9876,Y
-		{0x3a, "dec", m_Accumulator, 1, 2, c.op_dec},               // DEC
-		{0x3b, "tsc", m_Implied, 1, 2, c.op_tsc},                   // TSC
-		{0x3c, "bit", m_Absolute_X, 3, 6, c.op_bit},                // BIT $9876,X
-		{0x3d, "and", m_Absolute_X, 3, 6, c.op_and},                // AND $9876,X
-		{0x3e, "rol", m_Absolute_X, 3, 9, c.op_rol},                // ROL $9876,X
-		{0x3f, "and", m_Absolute_Long_X, 4, 6, c.op_and},           // AND $FEDCBA,X
-		{0x40, "rti", m_Implied, 1, 7, c.op_rti},                   // RTI
-		{0x41, "eor", m_DP_X_Indirect, 2, 7, c.op_eor},             // EOR ($10,X)
-		{0x42, "wdm", m_Immediate, 2, 2, c.op_wdm},                 // WDM
-		{0x43, "eor", m_Stack_Relative, 2, 5, c.op_eor},            // EOR $32,S
-		{0x44, "mvp", m_BlockMove, 3, 7, c.op_mvp},                 // MVP #$12,#$34
-		{0x45, "eor", m_DP, 2, 4, c.op_eor},                        // EOR $10
-		{0x46, "lsr", m_DP, 2, 7, c.op_lsr},                        // LSR $10
-		{0x47, "eor", m_DP_Indirect_Long, 2, 7, c.op_eor},          // EOR [$10]
-		{0x48, "pha", m_Implied, 1, 4, c.op_pha},                   // PHA
-		{0x49, "eor", m_Immediate_flagM, 3, 3, c.op_eor},           // EOR #$54
-		{0x4a, "lsr", m_Accumulator, 1, 2, c.op_lsr},               // LSR
-		{0x4b, "phk", m_Implied, 1, 3, c.op_phk},                   // PHK
-		{0x4c, "jmp", m_Absolute, 3, 3, c.op_jmp},                  // JMP $1234
-		{0x4d, "eor", m_Absolute, 3, 5, c.op_eor},                  // EOR $9876
-		{0x4e, "lsr", m_Absolute, 3, 8, c.op_lsr},                  // LSR $9876
-		{0x4f, "eor", m_Absolute_Long, 4, 6, c.op_eor},             // EOR $FEDBCA
-		{0x50, "bvc", m_PC_Relative, 2, 2, c.op_bvc},               // BVC LABEL
-		{0x51, "eor", m_DP_Indirect_Y, 2, 7, c.op_eor},             // EOR ($10),Y
-		{0x52, "eor", m_DP_Indirect, 2, 6, c.op_eor},               // EOR ($10)
-		{0x53, "eor", m_Stack_Relative_Indirect_Y, 2, 8, c.op_eor}, // EOR ($32,S),Y
-		{0x54, "mvn", m_BlockMove, 3, 7, c.op_mvn},                 // MVN #$12,#$34
-		{0x55, "eor", m_DP_X, 2, 5, c.op_eor},                      // EOR $10,X
-		{0x56, "lsr", m_DP_X, 2, 8, c.op_lsr},                      // LSR $10,X
-		{0x57, "eor", m_DP_Indirect_Long_Y, 2, 7, c.op_eor},        // EOR [$10],Y
-		{0x58, "cli", m_Implied, 1, 2, c.op_cli},                   // CLI
-		{0x59, "eor", m_Absolute_Y, 3, 6, c.op_eor},                // EOR $9876,Y
-		{0x5a, "phy", m_Implied, 1, 4, c.op_phy},                   // PHY
-		{0x5b, "tcd", m_Implied, 1, 2, c.op_tcd},                   // TCD
-		{0x5c, "jmp", m_Absolute_Long, 4, 4, c.op_jmp},             // JMP $FEDCBA
-		{0x5d, "eor", m_Absolute_X, 3, 6, c.op_eor},                // EOR $9876,X
-		{0x5e, "lsr", m_Absolute_X, 3, 9, c.op_lsr},                // LSR $9876,X
-		{0x5f, "eor", m_Absolute_Long_X, 4, 6, c.op_eor},           // EOR $FEDCBA,X
-		{0x60, "rts", m_Implied, 1, 6, c.op_rts},                   // RTS
-		{0x61, "adc", m_DP_X_Indirect, 2, 7, c.op_adc},             // ADC ($10,X)
-		{0x62, "per", m_PC_Relative_Long, 3, 6, c.op_per},          // PER LABEL
-		{0x63, "adc", m_Stack_Relative, 2, 5, c.op_adc},            // ADC $32,S
-		{0x64, "stz", m_DP, 2, 4, c.op_stz},                        // STZ $10
-		{0x65, "adc", m_DP, 2, 4, c.op_adc},                        // ADC $10
-		{0x66, "ror", m_DP, 2, 7, c.op_ror},                        // ROR $10
-		{0x67, "adc", m_DP_Indirect_Long, 2, 7, c.op_adc},          // ADC [$10]
-		{0x68, "pla", m_Implied, 1, 5, c.op_pla},                   // PLA
-		{0x69, "adc", m_Immediate_flagM, 3, 3, c.op_adc},           // ADC #$54
-		{0x6a, "ror", m_Accumulator, 1, 2, c.op_ror},               // ROR
-		{0x6b, "rtl", m_Implied, 1, 6, c.op_rtl},                   // RTL
-		{0x6c, "jmp", m_Absolute_Indirect, 3, 5, c.op_jmp},         // JMP ($1234)
-		{0x6d, "adc", m_Absolute, 3, 5, c.op_adc},                  // ADC $9876
-		{0x6e, "ror", m_Absolute, 3, 8, c.op_ror},                  // ROR $9876
-		{0x6f, "adc", m_Absolute_Long, 4, 6, c.op_adc},             // ADC $FEDBCA
-		{0x70, "bvs", m_PC_Relative, 2, 2, c.op_bvs},               // BVS LABEL
-		{0x71, "adc", m_DP_Indirect_Y, 2, 7, c.op_adc},             // ADC ($10),Y
-		{0x72, "adc", m_DP_Indirect, 2, 6, c.op_adc},               // ADC ($10)
-		{0x73, "adc", m_Stack_Relative_Indirect_Y, 2, 8, c.op_adc}, // ADC ($32,S),Y
-		{0x74, "stz", m_DP_X, 2, 5, c.op_stz},                      // STZ $10,X
-		{0x75, "adc", m_DP_X, 2, 5, c.op_adc},                      // ADC $10,X
-		{0x76, "ror", m_DP_X, 2, 8, c.op_ror},                      // ROR $10,X
-		{0x77, "adc", m_DP_Indirect_Long_Y, 2, 7, c.op_adc},        // ADC [$10],Y
-		{0x78, "sei", m_Implied, 1, 2, c.op_sei},                   // SEI
-		{0x79, "adc", m_Absolute_Y, 3, 6, c.op_adc},                // ADC $9876,Y
-		{0x7a, "ply", m_Implied, 1, 5, c.op_ply},                   // PLY
-		{0x7b, "tdc", m_Implied, 1, 2, c.op_tdc},                   // TDC
-		{0x7c, "jmp", m_Absolute_X_Indirect, 3, 6, c.op_jmp},       // JMP ($1234,X)
-		{0x7d, "adc", m_Absolute_X, 3, 6, c.op_adc},                // ADC $9876,X
-		{0x7e, "ror", m_Absolute_X, 3, 9, c.op_ror},                // ROR $9876,X
-		{0x7f, "adc", m_Absolute_Long_X, 4, 6, c.op_adc},           // ADC $FEDCBA,X
-		{0x80, "bra", m_PC_Relative, 2, 3, c.op_bra},               // BRA LABEL
-		{0x81, "sta", m_DP_X_Indirect, 2, 7, c.op_sta},             // STA ($10,X)
-		{0x82, "brl", m_PC_Relative_Long, 3, 4, c.op_brl},          // BRL LABEL
-		{0x83, "sta", m_Stack_Relative, 2, 5, c.op_sta},            // STA $32,S
-		{0x84, "sty", m_DP, 2, 4, c.op_sty},                        // STY $10
-		{0x85, "sta", m_DP, 2, 4, c.op_sta},                        // STA $10
-		{0x86, "stx", m_DP, 2, 4, c.op_stx},                        // STX $10
-		{0x87, "sta", m_DP_Indirect_Long, 2, 7, c.op_sta},          // STA [$10]
-		{0x88, "dey", m_Implied, 1, 2, c.op_dey},                   // DEY
-		{0x89, "bit", m_Immediate_flagM, 3, 3, c.op_bit},           // BIT #$54
-		{0x8a, "txa", m_Implied, 1, 2, c.op_txa},                   // TXA
-		{0x8b, "phb", m_Implied, 1, 3, c.op_phb},                   // PHB
-		{0x8c, "sty", m_Absolute, 3, 5, c.op_sty},                  // STY $9876
-		{0x8d, "sta", m_Absolute, 3, 5, c.op_sta},                  // STA $9876
-		{0x8e, "stx", m_Absolute, 3, 5, c.op_stx},                  // STX $9876
-		{0x8f, "sta", m_Absolute_Long, 4, 6, c.op_sta},             // STA $FEDBCA
-		{0x90, "bcc", m_PC_Relative, 2, 2, c.op_bcc},               // BCC LABEL
-		{0x91, "sta", m_DP_Indirect_Y, 2, 7, c.op_sta},             // STA ($10),Y
-		{0x92, "sta", m_DP_Indirect, 2, 6, c.op_sta},               // STA ($10)
-		{0x93, "sta", m_Stack_Relative_Indirect_Y, 2, 8, c.op_sta}, // STA ($32,S),Y
-		{0x94, "sty", m_DP_X, 2, 5, c.op_sty},                      // STY $10,X
-		{0x95, "sta", m_DP_X, 2, 5, c.op_sta},                      // STA $10,X
-		{0x96, "stx", m_DP_Y, 2, 5, c.op_stx},                      // STX $10,Y
-		{0x97, "sta", m_DP_Indirect_Long_Y, 2, 7, c.op_sta},        // STA [$10],Y
-		{0x98, "tya", m_Implied, 1, 2, c.op_tya},                   // TYA
-		{0x99, "sta", m_Absolute_Y, 3, 6, c.op_sta},                // STA $9876,Y
-		{0x9a, "txs", m_Implied, 1, 2, c.op_txs},                   // TXS
-		{0x9b, "txy", m_Implied, 1, 2, c.op_txy},                   // TXY
-		{0x9c, "stz", m_Absolute, 3, 5, c.op_stz},                  // STZ $9876
-		{0x9d, "sta", m_Absolute_X, 3, 6, c.op_sta},                // STA $9876,X
-		{0x9e, "stz", m_Absolute_X, 3, 6, c.op_stz},                // STZ $9876,X
-		{0x9f, "sta", m_Absolute_Long_X, 4, 6, c.op_sta},           // STA $FEDCBA,X
-		{0xa0, "ldy", m_Immediate_flagX, 3, 3, c.op_ldy},           // LDY #$54
-		{0xa1, "lda", m_DP_X_Indirect, 2, 7, c.op_lda},             // LDA ($10,X)
-		{0xa2, "ldx", m_Immediate_flagX, 3, 3, c.op_ldx},           // LDX #$54
-		{0xa3, "lda", m_Stack_Relative, 2, 5, c.op_lda},            // LDA $32,S
-		{0xa4, "ldy", m_DP, 2, 4, c.op_ldy},                        // LDY $10
-		{0xa5, "lda", m_DP, 2, 4, c.op_lda},                        // LDA $10
-		{0xa6, "ldx", m_DP, 2, 4, c.op_ldx},                        // LDX $10
-		{0xa7, "lda", m_DP_Indirect_Long, 2, 7, c.op_lda},          // LDA [$10]
-		{0xa8, "tay", m_Implied, 1, 2, c.op_tay},                   // TAY
-		{0xa9, "lda", m_Immediate_flagM, 3, 3, c.op_lda},           // LDA #$54
-		{0xaa, "tax", m_Implied, 1, 2, c.op_tax},                   // TAX
-		{0xab, "plb", m_Implied, 1, 4, c.op_plb},                   // PLB
-		{0xac, "ldy", m_Absolute, 3, 5, c.op_ldy},                  // LDY $9876
-		{0xad, "lda", m_Absolute, 3, 5, c.op_lda},                  // LDA $9876
-		{0xae, "ldx", m_Absolute, 3, 5, c.op_ldx},                  // LDX $9876
-		{0xaf, "lda", m_Absolute_Long, 4, 6, c.op_lda},             // LDA $FEDBCA
-		{0xb0, "bcs", m_PC_Relative, 2, 2, c.op_bcs},               // BCS LABEL
-		{0xb1, "lda", m_DP_Indirect_Y, 2, 7, c.op_lda},             // LDA ($10),Y
-		{0xb2, "lda", m_DP_Indirect, 2, 6, c.op_lda},               // LDA ($10)
-		{0xb3, "lda", m_Stack_Relative_Indirect_Y, 2, 8, c.op_lda}, // LDA ($32,S),Y
-		{0xb4, "ldy", m_DP_X, 2, 5, c.op_ldy},                      // LDY $10,X
-		{0xb5, "lda", m_DP_X, 2, 5, c.op_lda},                      // LDA $10,X
-		{0xb6, "ldx", m_DP_Y, 2, 5, c.op_ldx},                      // LDX $10,Y
-		{0xb7, "lda", m_DP_Indirect_Long_Y, 2, 7, c.op_lda},        // LDA [$10],Y
-		{0xb8, "clv", m_Implied, 1, 2, c.op_clv},                   // CLV
-		{0xb9, "lda", m_Absolute_Y, 3, 6, c.op_lda},                // LDA $9876,Y
-		{0xba, "tsx", m_Implied, 1, 2, c.op_tsx},                   // TSX
-		{0xbb, "tyx", m_Implied, 1, 2, c.op_tyx},                   // TYX
-		{0xbc, "ldy", m_Absolute_X, 3, 6, c.op_ldy},                // LDY $9876,X
-		{0xbd, "lda", m_Absolute_X, 3, 6, c.op_lda},                // LDA $9876,X
-		{0xbe, "ldx", m_Absolute_Y, 3, 6, c.op_ldx},                // LDX $9876,Y
-		{0xbf, "lda", m_Absolute_Long_X, 4, 6, c.op_lda},           // LDA $FEDCBA,X
-		{0xc0, "cpy", m_Immediate_flagX, 3, 3, c.op_cpy},           // CPY #$54
-		{0xc1, "cmp", m_DP_X_Indirect, 2, 7, c.op_cmp},             // CMP ($10,X)
-		{0xc2, "rep", m_Immediate, 2, 3, c.op_rep},                 // REP #$12
-		{0xc3, "cmp", m_Stack_Relative, 2, 5, c.op_cmp},            // CMP $32,S
-		{0xc4, "cpy", m_DP, 2, 4, c.op_cpy},                        // CPY $10
-		{0xc5, "cmp", m_DP, 2, 4, c.op_cmp},                        // CMP $10
-		{0xc6, "dec", m_DP, 2, 7, c.op_dec},                        // DEC $10
-		{0xc7, "cmp", m_DP_Indirect_Long, 2, 7, c.op_cmp},          // CMP [$10]
-		{0xc8, "iny", m_Implied, 1, 2, c.op_iny},                   // INY
-		{0xc9, "cmp", m_Immediate_flagM, 3, 3, c.op_cmp},           // CMP #$54
-		{0xca, "dex", m_Implied, 1, 2, c.op_dex},                   // DEX
-		{0xcb, "wai", m_Implied, 1, 3, c.wai},                      // WAI
-		{0xcc, "cpy", m_Absolute, 3, 5, c.op_cpy},                  // CPY $9876
-		{0xcd, "cmp", m_Absolute, 3, 5, c.op_cmp},                  // CMP $9876
-		{0xce, "dec", m_Absolute, 3, 8, c.op_dec},                  // DEC $9876
-		{0xcf, "cmp", m_Absolute_Long, 4, 6, c.op_cmp},             // CMP $FEDBCA
-		{0xd0, "bne", m_PC_Relative, 2, 2, c.op_bne},               // BNE LABEL
-		{0xd1, "cmp", m_DP_Indirect_Y, 2, 7, c.op_cmp},             // CMP ($10),Y
-		{0xd2, "cmp", m_DP_Indirect, 2, 6, c.op_cmp},               // CMP ($10)
-		{0xd3, "cmp", m_Stack_Relative_Indirect_Y, 2, 8, c.op_cmp}, // CMP ($32,S),Y
-		{0xd4, "pei", m_DP, 2, 6, c.op_pei},                        // PEI $12
-		{0xd5, "cmp", m_DP_X, 2, 5, c.op_cmp},                      // CMP $10,X
-		{0xd6, "dec", m_DP_X, 2, 8, c.op_dec},                      // DEC $10,X
-		{0xd7, "cmp", m_DP_Indirect_Long_Y, 2, 7, c.op_cmp},        // CMP [$10],Y
-		{0xd8, "cld", m_Implied, 1, 2, c.op_cld},                   // CLD
-		{0xd9, "cmp", m_Absolute_Y, 3, 6, c.op_cmp},                // CMP $9876,Y
-		{0xda, "phx", m_Implied, 1, 4, c.op_phx},                   // PHX
-		{0xdb, "stp", m_Implied, 1, 3, c.stp},                      // STP
-		{0xdc, "jmp", m_Absolute_Indirect_Long, 3, 6, c.op_jmp},    // JMP [$1234]
-		{0xdd, "cmp", m_Absolute_X, 3, 6, c.op_cmp},                // CMP $9876,X
-		{0xde, "dec", m_Absolute_X, 3, 9, c.op_dec},                // DEC $9876,X
-		{0xdf, "cmp", m_Absolute_Long_X, 4, 6, c.op_cmp},           // CMP $FEDCBA,X
-		{0xe0, "cpx", m_Immediate_flagX, 3, 3, c.op_cpx},           // CPX #$54
-		{0xe1, "sbc", m_DP_X_Indirect, 2, 7, c.op_sbc},             // SBC ($10,X)
-		{0xe2, "sep", m_Immediate, 2, 3, c.op_sep},                 // SEP #$12
-		{0xe3, "sbc", m_Stack_Relative, 2, 5, c.op_sbc},            // SBC $32,S
-		{0xe4, "cpx", m_DP, 2, 4, c.op_cpx},                        // CPX $10
-		{0xe5, "sbc", m_DP, 2, 4, c.op_sbc},                        // SBC $10
-		{0xe6, "inc", m_DP, 2, 7, c.op_inc},                        // INC $10
-		{0xe7, "sbc", m_DP_Indirect_Long, 2, 7, c.op_sbc},          // SBC [$10]
-		{0xe8, "inx", m_Implied, 1, 2, c.op_inx},                   // INX
-		{0xe9, "sbc", m_Immediate_flagM, 3, 3, c.op_sbc},           // SBC #$54
-		{0xea, "nop", m_Implied, 1, 2, c.op_nop},                   // NOP
-		{0xeb, "xba", m_Implied, 1, 3, c.op_xba},                   // XBA
-		{0xec, "cpx", m_Absolute, 3, 5, c.op_cpx},                  // CPX $9876
-		{0xed, "sbc", m_Absolute, 3, 5, c.op_sbc},                  // SBC $9876
-		{0xee, "inc", m_Absolute, 3, 8, c.op_inc},                  // INC $9876
-		{0xef, "sbc", m_Absolute_Long, 4, 6, c.op_sbc},             // SBC $FEDBCA
-		{0xf0, "beq", m_PC_Relative, 2, 2, c.op_beq},               // BEQ LABEL
-		{0xf1, "sbc", m_DP_Indirect_Y, 2, 7, c.op_sbc},             // SBC ($10),Y
-		{0xf2, "sbc", m_DP_Indirect, 2, 6, c.op_sbc},               // SBC ($10)
-		{0xf3, "sbc", m_Stack_Relative_Indirect_Y, 2, 8, c.op_sbc}, // SBC ($32,S),Y
-		{0xf4, "pea", m_Immediate, 3, 5, c.op_pea},                 // PEA #$1234
-		{0xf5, "sbc", m_DP_X, 2, 5, c.op_sbc},                      // SBC $10,X
-		{0xf6, "inc", m_DP_X, 2, 8, c.op_inc},                      // INC $10,X
-		{0xf7, "sbc", m_DP_Indirect_Long_Y, 2, 7, c.op_sbc},        // SBC [$10],Y
-		{0xf8, "sed", m_Implied, 1, 2, c.op_sed},                   // SED
-		{0xf9, "sbc", m_Absolute_Y, 3, 6, c.op_sbc},                // SBC $9876,Y
-		{0xfa, "plx", m_Implied, 1, 5, c.op_plx},                   // PLX
-		{0xfb, "xce", m_Implied, 1, 2, c.op_xce},                   // XCE
-		{0xfc, "jsr", m_Absolute_X_Indirect, 3, 8, c.op_jsr},       // JSR ($1234,X)
-		{0xfd, "sbc", m_Absolute_X, 3, 6, c.op_sbc},                // SBC $9876,X
-		{0xfe, "inc", m_Absolute_X, 3, 9, c.op_inc},                // INC $9876,X
-		{0xff, "sbc", m_Absolute_Long_X, 4, 6, c.op_sbc},           // SBC $FEDCBA,X
-	}
+var instructions = [256]instructionType{
+	{0x00, "brk", m_Implied, 1, 8, op_brk},                   // BRK
+	{0x01, "ora", m_DP_X_Indirect, 2, 7, op_ora},             // ORA ($10,X)
+	{0x02, "cop", m_Immediate, 2, 8, op_cop},                 // COP #$12
+	{0x03, "ora", m_Stack_Relative, 2, 5, op_ora},            // ORA $32,S
+	{0x04, "tsb", m_DP, 2, 7, op_tsb},                        // TSB $10
+	{0x05, "ora", m_DP, 2, 4, op_ora},                        // ORA $10
+	{0x06, "asl", m_DP, 2, 7, op_asl},                        // ASL $10
+	{0x07, "ora", m_DP_Indirect_Long, 2, 7, op_ora},          // ORA [$10]
+	{0x08, "php", m_Implied, 1, 3, op_php},                   // PHP
+	{0x09, "ora", m_Immediate_flagM, 3, 3, op_ora},           // ORA #$54
+	{0x0a, "asl", m_Accumulator, 1, 2, op_asl},               // ASL
+	{0x0b, "phd", m_Implied, 1, 4, op_phd},                   // PHD
+	{0x0c, "tsb", m_Absolute, 3, 8, op_tsb},                  // TSB $9876
+	{0x0d, "ora", m_Absolute, 3, 5, op_ora},                  // ORA $9876
+	{0x0e, "asl", m_Absolute, 3, 8, op_asl},                  // ASL $9876
+	{0x0f, "ora", m_Absolute_Long, 4, 6, op_ora},             // ORA $FEDBCA
+	{0x10, "bpl", m_PC_Relative, 2, 2, op_bpl},               // BPL LABEL
+	{0x11, "ora", m_DP_Indirect_Y, 2, 7, op_ora},             // ORA ($10),Y
+	{0x12, "ora", m_DP_Indirect, 2, 6, op_ora},               // ORA ($10)
+	{0x13, "ora", m_Stack_Relative_Indirect_Y, 2, 8, op_ora}, // ORA ($32,S),Y
+	{0x14, "trb", m_DP, 2, 7, op_trb},                        // TRB $10
+	{0x15, "ora", m_DP_X, 2, 5, op_ora},                      // ORA $10,X
+	{0x16, "asl", m_DP_X, 2, 8, op_asl},                      // ASL $10,X
+	{0x17, "ora", m_DP_Indirect_Long_Y, 2, 7, op_ora},        // ORA [$10],Y
+	{0x18, "clc", m_Implied, 1, 2, op_clc},                   // CLC
+	{0x19, "ora", m_Absolute_Y, 3, 6, op_ora},                // ORA $9876,Y
+	{0x1a, "inc", m_Accumulator, 1, 2, op_inc},               // INC
+	{0x1b, "tcs", m_Implied, 1, 2, op_tcs},                   // TCS
+	{0x1c, "trb", m_Absolute, 3, 8, op_trb},                  // TRB $9876
+	{0x1d, "ora", m_Absolute_X, 3, 6, op_ora},                // ORA $9876,X
+	{0x1e, "asl", m_Absolute_X, 3, 9, op_asl},                // ASL $9876,X
+	{0x1f, "ora", m_Absolute_Long_X, 4, 6, op_ora},           // ORA $FEDCBA,X
+	{0x20, "jsr", m_Absolute, 3, 6, op_jsr},                  // JSR $1234
+	{0x21, "and", m_DP_X_Indirect, 2, 7, op_and},             // AND ($10,X)
+	{0x22, "jsl", m_Absolute_Long, 4, 8, op_jsl},             // JSL $123456
+	{0x23, "and", m_Stack_Relative, 2, 5, op_and},            // AND $32,S
+	{0x24, "bit", m_DP, 2, 4, op_bit},                        // BIT $10
+	{0x25, "and", m_DP, 2, 4, op_and},                        // AND $10
+	{0x26, "rol", m_DP, 2, 7, op_rol},                        // ROL $10
+	{0x27, "and", m_DP_Indirect_Long, 2, 7, op_and},          // AND [$10]
+	{0x28, "plp", m_Implied, 1, 4, op_plp},                   // PLP
+	{0x29, "and", m_Immediate_flagM, 3, 3, op_and},           // AND #$54
+	{0x2a, "rol", m_Accumulator, 1, 2, op_rol},               // ROL
+	{0x2b, "pld", m_Implied, 1, 5, op_pld},                   // PLD
+	{0x2c, "bit", m_Absolute, 3, 5, op_bit},                  // BIT $9876
+	{0x2d, "and", m_Absolute, 3, 5, op_and},                  // AND $9876
+	{0x2e, "rol", m_Absolute, 3, 8, op_rol},                  // ROL $9876
+	{0x2f, "and", m_Absolute_Long, 4, 6, op_and},             // AND $FEDBCA
+	{0x30, "bmi", m_PC_Relative, 2, 2, op_bmi},               // BMI LABEL
+	{0x31, "and", m_DP_Indirect_Y, 2, 7, op_and},             // AND ($10),Y
+	{0x32, "and", m_DP_Indirect, 2, 6, op_and},               // AND ($10)
+	{0x33, "and", m_Stack_Relative_Indirect_Y, 2, 8, op_and}, // AND ($32,S),Y
+	{0x34, "bit", m_DP_X, 2, 5, op_bit},                      // BIT $10,X
+	{0x35, "and", m_DP_X, 2, 5, op_and},                      // AND $10,X
+	{0x36, "rol", m_DP_X, 2, 8, op_rol},                      // ROL $10,X
+	{0x37, "and", m_DP_Indirect_Long_Y, 2, 7, op_and},        // AND [$10],Y
+	{0x38, "sec", m_Implied, 1, 2, op_sec},                   // SEC
+	{0x39, "and", m_Absolute_Y, 3, 6, op_and},                // AND $9876,Y
+	{0x3a, "dec", m_Accumulator, 1, 2, op_dec},               // DEC
+	{0x3b, "tsc", m_Implied, 1, 2, op_tsc},                   // TSC
+	{0x3c, "bit", m_Absolute_X, 3, 6, op_bit},                // BIT $9876,X
+	{0x3d, "and", m_Absolute_X, 3, 6, op_and},                // AND $9876,X
+	{0x3e, "rol", m_Absolute_X, 3, 9, op_rol},                // ROL $9876,X
+	{0x3f, "and", m_Absolute_Long_X, 4, 6, op_and},           // AND $FEDCBA,X
+	{0x40, "rti", m_Implied, 1, 7, op_rti},                   // RTI
+	{0x41, "eor", m_DP_X_Indirect, 2, 7, op_eor},             // EOR ($10,X)
+	{0x42, "wdm", m_Immediate, 2, 2, op_wdm},                 // WDM
+	{0x43, "eor", m_Stack_Relative, 2, 5, op_eor},            // EOR $32,S
+	{0x44, "mvp", m_BlockMove, 3, 7, op_mvp},                 // MVP #$12,#$34
+	{0x45, "eor", m_DP, 2, 4, op_eor},                        // EOR $10
+	{0x46, "lsr", m_DP, 2, 7, op_lsr},                        // LSR $10
+	{0x47, "eor", m_DP_Indirect_Long, 2, 7, op_eor},          // EOR [$10]
+	{0x48, "pha", m_Implied, 1, 4, op_pha},                   // PHA
+	{0x49, "eor", m_Immediate_flagM, 3, 3, op_eor},           // EOR #$54
+	{0x4a, "lsr", m_Accumulator, 1, 2, op_lsr},               // LSR
+	{0x4b, "phk", m_Implied, 1, 3, op_phk},                   // PHK
+	{0x4c, "jmp", m_Absolute, 3, 3, op_jmp},                  // JMP $1234
+	{0x4d, "eor", m_Absolute, 3, 5, op_eor},                  // EOR $9876
+	{0x4e, "lsr", m_Absolute, 3, 8, op_lsr},                  // LSR $9876
+	{0x4f, "eor", m_Absolute_Long, 4, 6, op_eor},             // EOR $FEDBCA
+	{0x50, "bvc", m_PC_Relative, 2, 2, op_bvc},               // BVC LABEL
+	{0x51, "eor", m_DP_Indirect_Y, 2, 7, op_eor},             // EOR ($10),Y
+	{0x52, "eor", m_DP_Indirect, 2, 6, op_eor},               // EOR ($10)
+	{0x53, "eor", m_Stack_Relative_Indirect_Y, 2, 8, op_eor}, // EOR ($32,S),Y
+	{0x54, "mvn", m_BlockMove, 3, 7, op_mvn},                 // MVN #$12,#$34
+	{0x55, "eor", m_DP_X, 2, 5, op_eor},                      // EOR $10,X
+	{0x56, "lsr", m_DP_X, 2, 8, op_lsr},                      // LSR $10,X
+	{0x57, "eor", m_DP_Indirect_Long_Y, 2, 7, op_eor},        // EOR [$10],Y
+	{0x58, "cli", m_Implied, 1, 2, op_cli},                   // CLI
+	{0x59, "eor", m_Absolute_Y, 3, 6, op_eor},                // EOR $9876,Y
+	{0x5a, "phy", m_Implied, 1, 4, op_phy},                   // PHY
+	{0x5b, "tcd", m_Implied, 1, 2, op_tcd},                   // TCD
+	{0x5c, "jmp", m_Absolute_Long, 4, 4, op_jmp},             // JMP $FEDCBA
+	{0x5d, "eor", m_Absolute_X, 3, 6, op_eor},                // EOR $9876,X
+	{0x5e, "lsr", m_Absolute_X, 3, 9, op_lsr},                // LSR $9876,X
+	{0x5f, "eor", m_Absolute_Long_X, 4, 6, op_eor},           // EOR $FEDCBA,X
+	{0x60, "rts", m_Implied, 1, 6, op_rts},                   // RTS
+	{0x61, "adc", m_DP_X_Indirect, 2, 7, op_adc},             // ADC ($10,X)
+	{0x62, "per", m_PC_Relative_Long, 3, 6, op_per},          // PER LABEL
+	{0x63, "adc", m_Stack_Relative, 2, 5, op_adc},            // ADC $32,S
+	{0x64, "stz", m_DP, 2, 4, op_stz},                        // STZ $10
+	{0x65, "adc", m_DP, 2, 4, op_adc},                        // ADC $10
+	{0x66, "ror", m_DP, 2, 7, op_ror},                        // ROR $10
+	{0x67, "adc", m_DP_Indirect_Long, 2, 7, op_adc},          // ADC [$10]
+	{0x68, "pla", m_Implied, 1, 5, op_pla},                   // PLA
+	{0x69, "adc", m_Immediate_flagM, 3, 3, op_adc},           // ADC #$54
+	{0x6a, "ror", m_Accumulator, 1, 2, op_ror},               // ROR
+	{0x6b, "rtl", m_Implied, 1, 6, op_rtl},                   // RTL
+	{0x6c, "jmp", m_Absolute_Indirect, 3, 5, op_jmp},         // JMP ($1234)
+	{0x6d, "adc", m_Absolute, 3, 5, op_adc},                  // ADC $9876
+	{0x6e, "ror", m_Absolute, 3, 8, op_ror},                  // ROR $9876
+	{0x6f, "adc", m_Absolute_Long, 4, 6, op_adc},             // ADC $FEDBCA
+	{0x70, "bvs", m_PC_Relative, 2, 2, op_bvs},               // BVS LABEL
+	{0x71, "adc", m_DP_Indirect_Y, 2, 7, op_adc},             // ADC ($10),Y
+	{0x72, "adc", m_DP_Indirect, 2, 6, op_adc},               // ADC ($10)
+	{0x73, "adc", m_Stack_Relative_Indirect_Y, 2, 8, op_adc}, // ADC ($32,S),Y
+	{0x74, "stz", m_DP_X, 2, 5, op_stz},                      // STZ $10,X
+	{0x75, "adc", m_DP_X, 2, 5, op_adc},                      // ADC $10,X
+	{0x76, "ror", m_DP_X, 2, 8, op_ror},                      // ROR $10,X
+	{0x77, "adc", m_DP_Indirect_Long_Y, 2, 7, op_adc},        // ADC [$10],Y
+	{0x78, "sei", m_Implied, 1, 2, op_sei},                   // SEI
+	{0x79, "adc", m_Absolute_Y, 3, 6, op_adc},                // ADC $9876,Y
+	{0x7a, "ply", m_Implied, 1, 5, op_ply},                   // PLY
+	{0x7b, "tdc", m_Implied, 1, 2, op_tdc},                   // TDC
+	{0x7c, "jmp", m_Absolute_X_Indirect, 3, 6, op_jmp},       // JMP ($1234,X)
+	{0x7d, "adc", m_Absolute_X, 3, 6, op_adc},                // ADC $9876,X
+	{0x7e, "ror", m_Absolute_X, 3, 9, op_ror},                // ROR $9876,X
+	{0x7f, "adc", m_Absolute_Long_X, 4, 6, op_adc},           // ADC $FEDCBA,X
+	{0x80, "bra", m_PC_Relative, 2, 3, op_bra},               // BRA LABEL
+	{0x81, "sta", m_DP_X_Indirect, 2, 7, op_sta},             // STA ($10,X)
+	{0x82, "brl", m_PC_Relative_Long, 3, 4, op_brl},          // BRL LABEL
+	{0x83, "sta", m_Stack_Relative, 2, 5, op_sta},            // STA $32,S
+	{0x84, "sty", m_DP, 2, 4, op_sty},                        // STY $10
+	{0x85, "sta", m_DP, 2, 4, op_sta},                        // STA $10
+	{0x86, "stx", m_DP, 2, 4, op_stx},                        // STX $10
+	{0x87, "sta", m_DP_Indirect_Long, 2, 7, op_sta},          // STA [$10]
+	{0x88, "dey", m_Implied, 1, 2, op_dey},                   // DEY
+	{0x89, "bit", m_Immediate_flagM, 3, 3, op_bit},           // BIT #$54
+	{0x8a, "txa", m_Implied, 1, 2, op_txa},                   // TXA
+	{0x8b, "phb", m_Implied, 1, 3, op_phb},                   // PHB
+	{0x8c, "sty", m_Absolute, 3, 5, op_sty},                  // STY $9876
+	{0x8d, "sta", m_Absolute, 3, 5, op_sta},                  // STA $9876
+	{0x8e, "stx", m_Absolute, 3, 5, op_stx},                  // STX $9876
+	{0x8f, "sta", m_Absolute_Long, 4, 6, op_sta},             // STA $FEDBCA
+	{0x90, "bcc", m_PC_Relative, 2, 2, op_bcc},               // BCC LABEL
+	{0x91, "sta", m_DP_Indirect_Y, 2, 7, op_sta},             // STA ($10),Y
+	{0x92, "sta", m_DP_Indirect, 2, 6, op_sta},               // STA ($10)
+	{0x93, "sta", m_Stack_Relative_Indirect_Y, 2, 8, op_sta}, // STA ($32,S),Y
+	{0x94, "sty", m_DP_X, 2, 5, op_sty},                      // STY $10,X
+	{0x95, "sta", m_DP_X, 2, 5, op_sta},                      // STA $10,X
+	{0x96, "stx", m_DP_Y, 2, 5, op_stx},                      // STX $10,Y
+	{0x97, "sta", m_DP_Indirect_Long_Y, 2, 7, op_sta},        // STA [$10],Y
+	{0x98, "tya", m_Implied, 1, 2, op_tya},                   // TYA
+	{0x99, "sta", m_Absolute_Y, 3, 6, op_sta},                // STA $9876,Y
+	{0x9a, "txs", m_Implied, 1, 2, op_txs},                   // TXS
+	{0x9b, "txy", m_Implied, 1, 2, op_txy},                   // TXY
+	{0x9c, "stz", m_Absolute, 3, 5, op_stz},                  // STZ $9876
+	{0x9d, "sta", m_Absolute_X, 3, 6, op_sta},                // STA $9876,X
+	{0x9e, "stz", m_Absolute_X, 3, 6, op_stz},                // STZ $9876,X
+	{0x9f, "sta", m_Absolute_Long_X, 4, 6, op_sta},           // STA $FEDCBA,X
+	{0xa0, "ldy", m_Immediate_flagX, 3, 3, op_ldy},           // LDY #$54
+	{0xa1, "lda", m_DP_X_Indirect, 2, 7, op_lda},             // LDA ($10,X)
+	{0xa2, "ldx", m_Immediate_flagX, 3, 3, op_ldx},           // LDX #$54
+	{0xa3, "lda", m_Stack_Relative, 2, 5, op_lda},            // LDA $32,S
+	{0xa4, "ldy", m_DP, 2, 4, op_ldy},                        // LDY $10
+	{0xa5, "lda", m_DP, 2, 4, op_lda},                        // LDA $10
+	{0xa6, "ldx", m_DP, 2, 4, op_ldx},                        // LDX $10
+	{0xa7, "lda", m_DP_Indirect_Long, 2, 7, op_lda},          // LDA [$10]
+	{0xa8, "tay", m_Implied, 1, 2, op_tay},                   // TAY
+	{0xa9, "lda", m_Immediate_flagM, 3, 3, op_lda},           // LDA #$54
+	{0xaa, "tax", m_Implied, 1, 2, op_tax},                   // TAX
+	{0xab, "plb", m_Implied, 1, 4, op_plb},                   // PLB
+	{0xac, "ldy", m_Absolute, 3, 5, op_ldy},                  // LDY $9876
+	{0xad, "lda", m_Absolute, 3, 5, op_lda},                  // LDA $9876
+	{0xae, "ldx", m_Absolute, 3, 5, op_ldx},                  // LDX $9876
+	{0xaf, "lda", m_Absolute_Long, 4, 6, op_lda},             // LDA $FEDBCA
+	{0xb0, "bcs", m_PC_Relative, 2, 2, op_bcs},               // BCS LABEL
+	{0xb1, "lda", m_DP_Indirect_Y, 2, 7, op_lda},             // LDA ($10),Y
+	{0xb2, "lda", m_DP_Indirect, 2, 6, op_lda},               // LDA ($10)
+	{0xb3, "lda", m_Stack_Relative_Indirect_Y, 2, 8, op_lda}, // LDA ($32,S),Y
+	{0xb4, "ldy", m_DP_X, 2, 5, op_ldy},                      // LDY $10,X
+	{0xb5, "lda", m_DP_X, 2, 5, op_lda},                      // LDA $10,X
+	{0xb6, "ldx", m_DP_Y, 2, 5, op_ldx},                      // LDX $10,Y
+	{0xb7, "lda", m_DP_Indirect_Long_Y, 2, 7, op_lda},        // LDA [$10],Y
+	{0xb8, "clv", m_Implied, 1, 2, op_clv},                   // CLV
+	{0xb9, "lda", m_Absolute_Y, 3, 6, op_lda},                // LDA $9876,Y
+	{0xba, "tsx", m_Implied, 1, 2, op_tsx},                   // TSX
+	{0xbb, "tyx", m_Implied, 1, 2, op_tyx},                   // TYX
+	{0xbc, "ldy", m_Absolute_X, 3, 6, op_ldy},                // LDY $9876,X
+	{0xbd, "lda", m_Absolute_X, 3, 6, op_lda},                // LDA $9876,X
+	{0xbe, "ldx", m_Absolute_Y, 3, 6, op_ldx},                // LDX $9876,Y
+	{0xbf, "lda", m_Absolute_Long_X, 4, 6, op_lda},           // LDA $FEDCBA,X
+	{0xc0, "cpy", m_Immediate_flagX, 3, 3, op_cpy},           // CPY #$54
+	{0xc1, "cmp", m_DP_X_Indirect, 2, 7, op_cmp},             // CMP ($10,X)
+	{0xc2, "rep", m_Immediate, 2, 3, op_rep},                 // REP #$12
+	{0xc3, "cmp", m_Stack_Relative, 2, 5, op_cmp},            // CMP $32,S
+	{0xc4, "cpy", m_DP, 2, 4, op_cpy},                        // CPY $10
+	{0xc5, "cmp", m_DP, 2, 4, op_cmp},                        // CMP $10
+	{0xc6, "dec", m_DP, 2, 7, op_dec},                        // DEC $10
+	{0xc7, "cmp", m_DP_Indirect_Long, 2, 7, op_cmp},          // CMP [$10]
+	{0xc8, "iny", m_Implied, 1, 2, op_iny},                   // INY
+	{0xc9, "cmp", m_Immediate_flagM, 3, 3, op_cmp},           // CMP #$54
+	{0xca, "dex", m_Implied, 1, 2, op_dex},                   // DEX
+	{0xcb, "wai", m_Implied, 1, 3, op_wai},                   // WAI
+	{0xcc, "cpy", m_Absolute, 3, 5, op_cpy},                  // CPY $9876
+	{0xcd, "cmp", m_Absolute, 3, 5, op_cmp},                  // CMP $9876
+	{0xce, "dec", m_Absolute, 3, 8, op_dec},                  // DEC $9876
+	{0xcf, "cmp", m_Absolute_Long, 4, 6, op_cmp},             // CMP $FEDBCA
+	{0xd0, "bne", m_PC_Relative, 2, 2, op_bne},               // BNE LABEL
+	{0xd1, "cmp", m_DP_Indirect_Y, 2, 7, op_cmp},             // CMP ($10),Y
+	{0xd2, "cmp", m_DP_Indirect, 2, 6, op_cmp},               // CMP ($10)
+	{0xd3, "cmp", m_Stack_Relative_Indirect_Y, 2, 8, op_cmp}, // CMP ($32,S),Y
+	{0xd4, "pei", m_DP, 2, 6, op_pei},                        // PEI $12
+	{0xd5, "cmp", m_DP_X, 2, 5, op_cmp},                      // CMP $10,X
+	{0xd6, "dec", m_DP_X, 2, 8, op_dec},                      // DEC $10,X
+	{0xd7, "cmp", m_DP_Indirect_Long_Y, 2, 7, op_cmp},        // CMP [$10],Y
+	{0xd8, "cld", m_Implied, 1, 2, op_cld},                   // CLD
+	{0xd9, "cmp", m_Absolute_Y, 3, 6, op_cmp},                // CMP $9876,Y
+	{0xda, "phx", m_Implied, 1, 4, op_phx},                   // PHX
+	{0xdb, "stp", m_Implied, 1, 3, op_stp},                   // STP
+	{0xdc, "jmp", m_Absolute_Indirect_Long, 3, 6, op_jmp},    // JMP [$1234]
+	{0xdd, "cmp", m_Absolute_X, 3, 6, op_cmp},                // CMP $9876,X
+	{0xde, "dec", m_Absolute_X, 3, 9, op_dec},                // DEC $9876,X
+	{0xdf, "cmp", m_Absolute_Long_X, 4, 6, op_cmp},           // CMP $FEDCBA,X
+	{0xe0, "cpx", m_Immediate_flagX, 3, 3, op_cpx},           // CPX #$54
+	{0xe1, "sbc", m_DP_X_Indirect, 2, 7, op_sbc},             // SBC ($10,X)
+	{0xe2, "sep", m_Immediate, 2, 3, op_sep},                 // SEP #$12
+	{0xe3, "sbc", m_Stack_Relative, 2, 5, op_sbc},            // SBC $32,S
+	{0xe4, "cpx", m_DP, 2, 4, op_cpx},                        // CPX $10
+	{0xe5, "sbc", m_DP, 2, 4, op_sbc},                        // SBC $10
+	{0xe6, "inc", m_DP, 2, 7, op_inc},                        // INC $10
+	{0xe7, "sbc", m_DP_Indirect_Long, 2, 7, op_sbc},          // SBC [$10]
+	{0xe8, "inx", m_Implied, 1, 2, op_inx},                   // INX
+	{0xe9, "sbc", m_Immediate_flagM, 3, 3, op_sbc},           // SBC #$54
+	{0xea, "nop", m_Implied, 1, 2, op_nop},                   // NOP
+	{0xeb, "xba", m_Implied, 1, 3, op_xba},                   // XBA
+	{0xec, "cpx", m_Absolute, 3, 5, op_cpx},                  // CPX $9876
+	{0xed, "sbc", m_Absolute, 3, 5, op_sbc},                  // SBC $9876
+	{0xee, "inc", m_Absolute, 3, 8, op_inc},                  // INC $9876
+	{0xef, "sbc", m_Absolute_Long, 4, 6, op_sbc},             // SBC $FEDBCA
+	{0xf0, "beq", m_PC_Relative, 2, 2, op_beq},               // BEQ LABEL
+	{0xf1, "sbc", m_DP_Indirect_Y, 2, 7, op_sbc},             // SBC ($10),Y
+	{0xf2, "sbc", m_DP_Indirect, 2, 6, op_sbc},               // SBC ($10)
+	{0xf3, "sbc", m_Stack_Relative_Indirect_Y, 2, 8, op_sbc}, // SBC ($32,S),Y
+	{0xf4, "pea", m_Immediate, 3, 5, op_pea},                 // PEA #$1234
+	{0xf5, "sbc", m_DP_X, 2, 5, op_sbc},                      // SBC $10,X
+	{0xf6, "inc", m_DP_X, 2, 8, op_inc},                      // INC $10,X
+	{0xf7, "sbc", m_DP_Indirect_Long_Y, 2, 7, op_sbc},        // SBC [$10],Y
+	{0xf8, "sed", m_Implied, 1, 2, op_sed},                   // SED
+	{0xf9, "sbc", m_Absolute_Y, 3, 6, op_sbc},                // SBC $9876,Y
+	{0xfa, "plx", m_Implied, 1, 5, op_plx},                   // PLX
+	{0xfb, "xce", m_Implied, 1, 2, op_xce},                   // XCE
+	{0xfc, "jsr", m_Absolute_X_Indirect, 3, 8, op_jsr},       // JSR ($1234,X)
+	{0xfd, "sbc", m_Absolute_X, 3, 6, op_sbc},                // SBC $9876,X
+	{0xfe, "inc", m_Absolute_X, 3, 9, op_inc},                // INC $9876,X
+	{0xff, "sbc", m_Absolute_Long_X, 4, 6, op_sbc},           // SBC $FEDCBA,X
 }
 
 type CPU struct {
@@ -381,10 +379,6 @@ type CPU struct {
 	E byte // Emulation mode flag
 
 	Interrupt byte // interrupt type to perform
-
-	// this cannot be copied because the proc func()s reference the specific *CPU instance:
-	// TODO: redesign the opcodes to take a *CPU as first parameter instead of method receiver
-	instructions [256]instructionType
 }
 
 func New(bus *bus.Bus) (*CPU, error) {
@@ -396,13 +390,11 @@ func New(bus *bus.Bus) (*CPU, error) {
 func (cpu *CPU) Init(bus *bus.Bus) {
 	*cpu = CPU{Bus: bus}
 	cpu.WDM = 0
-	cpu.createTable()
 }
 
 func (cpu *CPU) InitFrom(other *CPU, bus *bus.Bus) {
 	*cpu = *other
 	cpu.Bus = bus
-	cpu.createTable()
 }
 
 // Reset resets the CPU to its initial powerup state
@@ -850,9 +842,9 @@ func (cpu *CPU) Step() (int, bool) {
 	cpu.PPC = cpu.PC
 	cpu.PRK = cpu.RK
 	opcode := cpu.nRead(cpu.RK, cpu.PC)
-	mode := cpu.instructions[opcode].mode
-	cpu.stepPC = uint16(cpu.instructions[opcode].size)
-	cpu.Cycles = cpu.instructions[opcode].cycles
+	mode := instructions[opcode].mode
+	cpu.stepPC = uint16(instructions[opcode].size)
+	cpu.Cycles = instructions[opcode].cycles
 
 	// addressing mode calculation
 	//
@@ -1085,7 +1077,7 @@ func (cpu *CPU) Step() (int, bool) {
 
 	// instruction execution
 	cpu.StepInfo = StepInfo{ea, addr, mode}
-	cpu.instructions[opcode].proc()
+	instructions[opcode].proc(cpu)
 
 	// counter and PC update
 	cpu.AllCycles += uint64(cpu.Cycles)
@@ -1100,7 +1092,7 @@ func (cpu *CPU) Step() (int, bool) {
 // XXXX - valid for 6502
 func (cpu *CPU) nmi() {
 	cpu.push16(cpu.PC)
-	cpu.op_php()
+	op_php(cpu)
 	//cpu.PC = cpu.Read16(0xFFFA)
 	cpu.PC = cpu.nRead16_cross(0x00, 0xFFEA)
 	cpu.I = 1
@@ -1131,7 +1123,7 @@ func (cpu *CPU) irq() {
 
 // ADC - Add with Carry
 // I'm not sure what I'm doing ;)
-func (cpu *CPU) op_adc() {
+func op_adc(cpu *CPU) {
 	if cpu.M == 1 {
 		a := uint16(cpu.RAl)
 		d := uint16(cpu.cmdRead())
@@ -1201,7 +1193,7 @@ func (cpu *CPU) op_adc() {
 }
 
 // AND - Logical AND
-func (cpu *CPU) op_and() {
+func op_and(cpu *CPU) {
 	if cpu.M == 1 {
 		cpu.RAl = cpu.RAl & cpu.cmdRead()
 		cpu.setZN8(cpu.RAl)
@@ -1212,7 +1204,7 @@ func (cpu *CPU) op_and() {
 }
 
 // ASL - Arithmetic Shift Left
-func (cpu *CPU) op_asl() {
+func op_asl(cpu *CPU) {
 	if cpu.StepInfo.Mode == m_Accumulator {
 		if cpu.M == 1 {
 			cpu.C = (cpu.RAl >> 7) & 1
@@ -1241,7 +1233,7 @@ func (cpu *CPU) op_asl() {
 }
 
 // BCC - Branch if Carry Clear
-func (cpu *CPU) op_bcc() {
+func op_bcc(cpu *CPU) {
 	if cpu.C == 0 {
 		cpu.addBranchCycles() // always before PC change!
 		cpu.PC = cpu.StepInfo.Addr
@@ -1250,7 +1242,7 @@ func (cpu *CPU) op_bcc() {
 }
 
 // BCS - Branch if Carry Set
-func (cpu *CPU) op_bcs() {
+func op_bcs(cpu *CPU) {
 	if cpu.C != 0 {
 		cpu.addBranchCycles()
 		cpu.PC = cpu.StepInfo.Addr
@@ -1259,7 +1251,7 @@ func (cpu *CPU) op_bcs() {
 }
 
 // BEQ - Branch if Equal
-func (cpu *CPU) op_beq() {
+func op_beq(cpu *CPU) {
 	if cpu.Z != 0 {
 		cpu.addBranchCycles()
 		cpu.PC = cpu.StepInfo.Addr
@@ -1293,7 +1285,7 @@ again, just the data, not the bitwise And).
 -  The z flag reflects whether the result (of the bitwise And) is zero.
 */
 
-func (cpu *CPU) op_bit() {
+func op_bit(cpu *CPU) {
 	if cpu.M == 1 {
 		val := cpu.cmdRead()
 		cpu.setZ8(cpu.RAl & val)
@@ -1323,7 +1315,7 @@ func (cpu *CPU) op_bit() {
 }
 
 // BMI - Branch if Minus
-func (cpu *CPU) op_bmi() {
+func op_bmi(cpu *CPU) {
 	if cpu.N != 0 {
 		cpu.addBranchCycles()
 		cpu.PC = cpu.StepInfo.Addr
@@ -1332,7 +1324,7 @@ func (cpu *CPU) op_bmi() {
 }
 
 // BNE - Branch if Not Equal
-func (cpu *CPU) op_bne() {
+func op_bne(cpu *CPU) {
 	if cpu.Z == 0 {
 		cpu.addBranchCycles()
 		cpu.PC = cpu.StepInfo.Addr
@@ -1341,7 +1333,7 @@ func (cpu *CPU) op_bne() {
 }
 
 // BPL - Branch if Positive
-func (cpu *CPU) op_bpl() {
+func op_bpl(cpu *CPU) {
 	if cpu.N == 0 {
 		cpu.addBranchCycles()
 		cpu.PC = cpu.StepInfo.Addr
@@ -1351,7 +1343,7 @@ func (cpu *CPU) op_bpl() {
 
 // BRK - Force Interrupt
 // XXX - from now duplicate with irq?
-func (cpu *CPU) op_brk() {
+func op_brk(cpu *CPU) {
 	if cpu.E == 1 {
 		cpu.push16(cpu.PC + 2)
 		cpu.push(cpu.Flags() | 0x10)
@@ -1375,7 +1367,7 @@ func (cpu *CPU) op_brk() {
 }
 
 // BVC - Branch if Overflow Clear
-func (cpu *CPU) op_bvc() {
+func op_bvc(cpu *CPU) {
 	if cpu.V == 0 {
 		cpu.addBranchCycles()
 		cpu.PC = cpu.StepInfo.Addr
@@ -1384,7 +1376,7 @@ func (cpu *CPU) op_bvc() {
 }
 
 // BVS - Branch if Overflow Set
-func (cpu *CPU) op_bvs() {
+func op_bvs(cpu *CPU) {
 	if cpu.V != 0 {
 		cpu.addBranchCycles()
 		cpu.PC = cpu.StepInfo.Addr
@@ -1393,27 +1385,27 @@ func (cpu *CPU) op_bvs() {
 }
 
 // CLC - Clear Carry Flag
-func (cpu *CPU) op_clc() {
+func op_clc(cpu *CPU) {
 	cpu.C = 0
 }
 
 // CLD - Clear Decimal Mode
-func (cpu *CPU) op_cld() {
+func op_cld(cpu *CPU) {
 	cpu.D = 0
 }
 
 // CLI - Clear Interrupt Disable
-func (cpu *CPU) op_cli() {
+func op_cli(cpu *CPU) {
 	cpu.I = 0
 }
 
 // CLV - Clear Overflow Flag
-func (cpu *CPU) op_clv() {
+func op_clv(cpu *CPU) {
 	cpu.V = 0
 }
 
 // CMP - Compare
-func (cpu *CPU) op_cmp() {
+func op_cmp(cpu *CPU) {
 	if cpu.M == 1 {
 		value := cpu.cmdRead()
 		cpu.compare8(cpu.RAl, value)
@@ -1424,7 +1416,7 @@ func (cpu *CPU) op_cmp() {
 }
 
 // CPX - Compare X Register
-func (cpu *CPU) op_cpx() {
+func op_cpx(cpu *CPU) {
 	if cpu.X == 1 {
 		value := cpu.cmdRead()
 		cpu.compare8(cpu.RXl, value)
@@ -1435,7 +1427,7 @@ func (cpu *CPU) op_cpx() {
 }
 
 // CPY - Compare Y Register
-func (cpu *CPU) op_cpy() {
+func op_cpy(cpu *CPU) {
 	if cpu.X == 1 {
 		value := cpu.cmdRead()
 		cpu.compare8(cpu.RYl, value)
@@ -1446,7 +1438,7 @@ func (cpu *CPU) op_cpy() {
 }
 
 // DEC - Decrement Memory
-func (cpu *CPU) op_dec() {
+func op_dec(cpu *CPU) {
 	if cpu.StepInfo.Mode == m_Accumulator {
 		if cpu.M == 1 {
 			cpu.RAl--
@@ -1469,7 +1461,7 @@ func (cpu *CPU) op_dec() {
 }
 
 // DEX - Decrement X Register
-func (cpu *CPU) op_dex() {
+func op_dex(cpu *CPU) {
 	if cpu.X == 1 {
 		cpu.RXl--
 		cpu.setZN8(cpu.RXl)
@@ -1480,7 +1472,7 @@ func (cpu *CPU) op_dex() {
 }
 
 // DEY - Decrement Y Register
-func (cpu *CPU) op_dey() {
+func op_dey(cpu *CPU) {
 	if cpu.X == 1 {
 		cpu.RYl--
 		cpu.setZN8(cpu.RYl)
@@ -1491,7 +1483,7 @@ func (cpu *CPU) op_dey() {
 }
 
 // EOR - Exclusive OR
-func (cpu *CPU) op_eor() {
+func op_eor(cpu *CPU) {
 	if cpu.M == 1 {
 		cpu.RAl = cpu.RAl ^ cpu.cmdRead()
 		cpu.setZN8(cpu.RAl)
@@ -1502,7 +1494,7 @@ func (cpu *CPU) op_eor() {
 }
 
 // INC - Increment Memory
-func (cpu *CPU) op_inc() {
+func op_inc(cpu *CPU) {
 	if cpu.StepInfo.Mode == m_Accumulator {
 		if cpu.M == 1 {
 			cpu.RAl++
@@ -1525,7 +1517,7 @@ func (cpu *CPU) op_inc() {
 }
 
 // INX - Increment X Register
-func (cpu *CPU) op_inx() {
+func op_inx(cpu *CPU) {
 	if cpu.X == 1 {
 		cpu.RXl++
 		cpu.setZN8(cpu.RXl)
@@ -1536,7 +1528,7 @@ func (cpu *CPU) op_inx() {
 }
 
 // INY - Increment Y Register
-func (cpu *CPU) op_iny() {
+func op_iny(cpu *CPU) {
 	if cpu.X == 1 {
 		cpu.RYl++
 		cpu.setZN8(cpu.RYl)
@@ -1548,7 +1540,7 @@ func (cpu *CPU) op_iny() {
 
 // JMP - Jump
 // XXX - improve that!
-func (cpu *CPU) op_jmp() {
+func op_jmp(cpu *CPU) {
 	switch cpu.StepInfo.Mode {
 	case m_Absolute:
 		cpu.PC = cpu.StepInfo.Addr
@@ -1567,7 +1559,7 @@ func (cpu *CPU) op_jmp() {
 }
 
 // JSL - Jump to Subroutine Long
-func (cpu *CPU) op_jsl() {
+func op_jsl(cpu *CPU) {
 	cpu.push(cpu.RK)
 	cpu.push16(cpu.PC + 3)
 	cpu.PC = uint16(cpu.StepInfo.EA)
@@ -1576,7 +1568,7 @@ func (cpu *CPU) op_jsl() {
 }
 
 // JSR - Jump to Subroutine
-func (cpu *CPU) op_jsr() {
+func op_jsr(cpu *CPU) {
 	cpu.push16(cpu.PC + 2)
 	switch cpu.StepInfo.Mode {
 	case m_Absolute:
@@ -1588,7 +1580,7 @@ func (cpu *CPU) op_jsr() {
 }
 
 // LDA - Load Accumulator - for Immediate arguments
-func (cpu *CPU) op_lda() {
+func op_lda(cpu *CPU) {
 	if cpu.M == 1 {
 		cpu.RAl = cpu.cmdRead()
 		cpu.setZN8(cpu.RAl)
@@ -1599,7 +1591,7 @@ func (cpu *CPU) op_lda() {
 }
 
 // LDX - Load X Register
-func (cpu *CPU) op_ldx() {
+func op_ldx(cpu *CPU) {
 	if cpu.X == 1 {
 		cpu.RXl = cpu.cmdRead()
 		cpu.setZN8(cpu.RXl)
@@ -1610,7 +1602,7 @@ func (cpu *CPU) op_ldx() {
 }
 
 // LDY - Load Y Register
-func (cpu *CPU) op_ldy() {
+func op_ldy(cpu *CPU) {
 	if cpu.X == 1 {
 		cpu.RYl = cpu.cmdRead()
 		cpu.setZN8(cpu.RYl)
@@ -1621,7 +1613,7 @@ func (cpu *CPU) op_ldy() {
 }
 
 // LSR - Logical Shift Right
-func (cpu *CPU) op_lsr() {
+func op_lsr(cpu *CPU) {
 	if cpu.StepInfo.Mode == m_Accumulator {
 		if cpu.M == 1 {
 			cpu.C = cpu.RAl & 1
@@ -1650,11 +1642,11 @@ func (cpu *CPU) op_lsr() {
 }
 
 // NOP - No Operation
-func (cpu *CPU) op_nop() {
+func op_nop(cpu *CPU) {
 }
 
 // ORA - Logical Inclusive OR
-func (cpu *CPU) op_ora() {
+func op_ora(cpu *CPU) {
 	if cpu.M == 1 {
 		cpu.RAl = cpu.RAl | cpu.cmdRead()
 		cpu.setZN8(cpu.RAl)
@@ -1665,7 +1657,7 @@ func (cpu *CPU) op_ora() {
 }
 
 // PHA - Push Accumulator
-func (cpu *CPU) op_pha() {
+func op_pha(cpu *CPU) {
 	if cpu.M == 1 {
 		cpu.push(cpu.RAl)
 	} else {
@@ -1674,13 +1666,13 @@ func (cpu *CPU) op_pha() {
 }
 
 // PHP - Push Processor Status
-func (cpu *CPU) op_php() {
+func op_php(cpu *CPU) {
 	//cpu.push(cpu.Flags() | 0x10)
 	cpu.push(cpu.Flags())
 }
 
 // PHX - PusH X Register
-func (cpu *CPU) op_phx() {
+func op_phx(cpu *CPU) {
 	if cpu.X == 1 {
 		cpu.push(cpu.RXl)
 	} else {
@@ -1689,7 +1681,7 @@ func (cpu *CPU) op_phx() {
 }
 
 // PHY - PusH Y Register
-func (cpu *CPU) op_phy() {
+func op_phy(cpu *CPU) {
 	if cpu.X == 1 {
 		cpu.push(cpu.RYl)
 	} else {
@@ -1698,7 +1690,7 @@ func (cpu *CPU) op_phy() {
 }
 
 // PLA - Pull Accumulator
-func (cpu *CPU) op_pla() {
+func op_pla(cpu *CPU) {
 	if cpu.M == 1 {
 		cpu.RAl = cpu.pull()
 		cpu.setZN8(cpu.RAl)
@@ -1709,13 +1701,13 @@ func (cpu *CPU) op_pla() {
 }
 
 // PLP - Pull Processor Status
-func (cpu *CPU) op_plp() {
+func op_plp(cpu *CPU) {
 	//cpu.SetFlags(cpu.pull()&0xEF | 0x20)
 	cpu.SetFlags(cpu.pull())
 }
 
 // ROL - Rotate Left
-func (cpu *CPU) op_rol() {
+func op_rol(cpu *CPU) {
 	c := cpu.C
 	if cpu.StepInfo.Mode == m_Accumulator {
 		if cpu.M == 1 {
@@ -1745,7 +1737,7 @@ func (cpu *CPU) op_rol() {
 }
 
 // ROR - Rotate Right
-func (cpu *CPU) op_ror() {
+func op_ror(cpu *CPU) {
 	c := cpu.C
 	if cpu.StepInfo.Mode == m_Accumulator {
 		if cpu.M == 1 {
@@ -1775,7 +1767,7 @@ func (cpu *CPU) op_ror() {
 }
 
 // RTI - Return from Interrupt
-func (cpu *CPU) op_rti() {
+func op_rti(cpu *CPU) {
 	//log.Println("cpu: rti")
 	//cpu.SetFlags(cpu.pull()&0xEF | 0x20)
 	if cpu.E == 1 {
@@ -1793,21 +1785,21 @@ func (cpu *CPU) op_rti() {
 }
 
 // RLK - ReTurn from subroutine Long
-func (cpu *CPU) op_rtl() {
+func op_rtl(cpu *CPU) {
 	cpu.PC = cpu.pull16() + 1
 	cpu.RK = cpu.pull()
 	cpu.stepPC = 0
 }
 
 // RTS - Return from Subroutine
-func (cpu *CPU) op_rts() {
+func op_rts(cpu *CPU) {
 	cpu.PC = cpu.pull16() + 1
 	cpu.stepPC = 0
 }
 
 // SBC - SuBstract with Carry
 // I'm not sure what I'm doing ;)
-func (cpu *CPU) op_sbc() {
+func op_sbc(cpu *CPU) {
 	if cpu.M == 1 {
 		a := uint16(cpu.RAl)
 		d := uint16(^cpu.cmdRead())
@@ -1898,22 +1890,22 @@ func (cpu *CPU) sbc() {
 */
 
 // SEC - Set Carry Flag
-func (cpu *CPU) op_sec() {
+func op_sec(cpu *CPU) {
 	cpu.C = 1
 }
 
 // SED - Set Decimal Flag
-func (cpu *CPU) op_sed() {
+func op_sed(cpu *CPU) {
 	cpu.D = 1
 }
 
 // SEI - Set Interrupt Disable
-func (cpu *CPU) op_sei() {
+func op_sei(cpu *CPU) {
 	cpu.I = 1
 }
 
 // STA - Store Accumulator
-func (cpu *CPU) op_sta() {
+func op_sta(cpu *CPU) {
 	if cpu.M == 1 {
 		cpu.cmdWrite(cpu.RAl)
 	} else {
@@ -1922,7 +1914,7 @@ func (cpu *CPU) op_sta() {
 }
 
 // STX - Store X Register
-func (cpu *CPU) op_stx() {
+func op_stx(cpu *CPU) {
 	if cpu.X == 1 {
 		cpu.cmdWrite(cpu.RXl)
 	} else {
@@ -1931,7 +1923,7 @@ func (cpu *CPU) op_stx() {
 }
 
 // STY - Store Y Register
-func (cpu *CPU) op_sty() {
+func op_sty(cpu *CPU) {
 	if cpu.X == 1 {
 		cpu.cmdWrite(cpu.RYl)
 	} else {
@@ -1940,7 +1932,7 @@ func (cpu *CPU) op_sty() {
 }
 
 // TAX - Transfer Accumulator to X
-func (cpu *CPU) op_tax() {
+func op_tax(cpu *CPU) {
 	var src uint16
 	if cpu.M == 1 {
 		src = uint16(cpu.RAh)<<8 | uint16(cpu.RAl)
@@ -1958,7 +1950,7 @@ func (cpu *CPU) op_tax() {
 }
 
 // TAY - Transfer Accumulator to Y
-func (cpu *CPU) op_tay() {
+func op_tay(cpu *CPU) {
 	var src uint16
 	if cpu.M == 1 {
 		src = uint16(cpu.RAh)<<8 | uint16(cpu.RAl)
@@ -1976,7 +1968,7 @@ func (cpu *CPU) op_tay() {
 }
 
 // TSX - Transfer Stack Pointer to X
-func (cpu *CPU) op_tsx() {
+func op_tsx(cpu *CPU) {
 	if cpu.X == 1 {
 		cpu.RXl = byte(cpu.SP & 0x00ff)
 		cpu.setZN8(cpu.RXl)
@@ -1987,7 +1979,7 @@ func (cpu *CPU) op_tsx() {
 }
 
 // TXA - Transfer X to Accumulator
-func (cpu *CPU) op_txa() {
+func op_txa(cpu *CPU) {
 	var src uint16
 	if cpu.X == 1 {
 		src = uint16(cpu.RXl)
@@ -2005,7 +1997,7 @@ func (cpu *CPU) op_txa() {
 }
 
 // TXS - Transfer X to Stack Pointer
-func (cpu *CPU) op_txs() {
+func op_txs(cpu *CPU) {
 	var src uint16
 	if cpu.X == 1 {
 		src = uint16(cpu.RXl)
@@ -2021,7 +2013,7 @@ func (cpu *CPU) op_txs() {
 }
 
 // TYA - Transfer Y to Accumulator
-func (cpu *CPU) op_tya() {
+func op_tya(cpu *CPU) {
 	var src uint16
 	if cpu.X == 1 {
 		src = uint16(cpu.RYl)
@@ -2039,20 +2031,20 @@ func (cpu *CPU) op_tya() {
 }
 
 // BRA - BRanch Always
-func (cpu *CPU) op_bra() {
+func op_bra(cpu *CPU) {
 	cpu.addBranchCycles() // always before PC change!
 	cpu.PC = cpu.StepInfo.Addr
 	cpu.stepPC = 0
 }
 
 // BRL - BRanch Long
-func (cpu *CPU) op_brl() {
+func op_brl(cpu *CPU) {
 	cpu.PC = cpu.StepInfo.Addr
 	cpu.stepPC = 0
 }
 
 // COP - COProcessor
-func (cpu *CPU) op_cop() {
+func op_cop(cpu *CPU) {
 	if cpu.E == 1 {
 		cpu.push16(cpu.PC + 2)
 		cpu.push(cpu.Flags())
@@ -2096,7 +2088,7 @@ accumulator means six bytes will be moved.
   BTW: specification says that mvn/mvp use full C accumulator
 
 */
-func (cpu *CPU) op_mvn() {
+func op_mvn(cpu *CPU) {
 	dst := cpu.nRead(cpu.RK, cpu.StepInfo.Addr)
 	src := cpu.nRead(cpu.RK, cpu.StepInfo.Addr+1)
 
@@ -2120,7 +2112,7 @@ func (cpu *CPU) op_mvn() {
 }
 
 // MVP - MoVe memory Positive
-func (cpu *CPU) op_mvp() {
+func op_mvp(cpu *CPU) {
 	dst := cpu.nRead(cpu.RK, cpu.StepInfo.Addr)
 	src := cpu.nRead(cpu.RK, cpu.StepInfo.Addr+1)
 
@@ -2144,22 +2136,22 @@ func (cpu *CPU) op_mvp() {
 }
 
 // PHB - PusH data Bank register
-func (cpu *CPU) op_phb() {
+func op_phb(cpu *CPU) {
 	cpu.push(cpu.RDBR)
 }
 
 // PHD - PusH Direct register
-func (cpu *CPU) op_phd() {
+func op_phd(cpu *CPU) {
 	cpu.push16(cpu.RD)
 }
 
 // PHK - PusH K register
-func (cpu *CPU) op_phk() {
+func op_phk(cpu *CPU) {
 	cpu.push(cpu.RK)
 }
 
 // PLX - PulL X Register
-func (cpu *CPU) op_plx() {
+func op_plx(cpu *CPU) {
 	if cpu.X == 1 {
 		cpu.RXl = cpu.pull()
 		cpu.setZN8(cpu.RXl)
@@ -2170,7 +2162,7 @@ func (cpu *CPU) op_plx() {
 }
 
 // PLY - PulL Y Register
-func (cpu *CPU) op_ply() {
+func op_ply(cpu *CPU) {
 	if cpu.X == 1 {
 		cpu.RYl = cpu.pull()
 		cpu.setZN8(cpu.RYl)
@@ -2181,36 +2173,36 @@ func (cpu *CPU) op_ply() {
 }
 
 // PEA - Push Effective Address
-func (cpu *CPU) op_pea() {
+func op_pea(cpu *CPU) {
 	cpu.push16(cpu.cmdRead16())
 	//val := cpu.cmdRead16()
 	//fmt.Fprintf(&cpu.LogBuf, "PEA %04x %04x\n", val, cpu.StepInfo.Addr)
 }
 
 // PLD - PulL Direct register
-func (cpu *CPU) op_pld() {
+func op_pld(cpu *CPU) {
 	cpu.RD = cpu.pull16()
 	cpu.setZN16(cpu.RD)
 }
 
 // PER - Push Effective Relative address
-func (cpu *CPU) op_per() {
+func op_per(cpu *CPU) {
 	cpu.push16(cpu.StepInfo.Addr)
 }
 
 // PEI - Push Effective Indirect address
-func (cpu *CPU) op_pei() {
+func op_pei(cpu *CPU) {
 	cpu.push16(cpu.cmdRead16())
 }
 
 // PLB - PulL data Bank register
-func (cpu *CPU) op_plb() {
+func op_plb(cpu *CPU) {
 	cpu.RDBR = cpu.pull()
 	cpu.setZN8(cpu.RDBR)
 }
 
 // REset Processor status bits
-func (cpu *CPU) op_rep() {
+func op_rep(cpu *CPU) {
 	neg_flags := ^cpu.Bus.EaRead(cpu.StepInfo.EA)
 	tmp_flags := cpu.Flags() & neg_flags
 	//fmt.Fprintf(&cpu.LogBuf, "op_rep %08b %08b %08b %08b\n", cpu.Bus.EaRead(cpu.StepInfo.EA), neg_flags, cpu.Flags(), tmp_flags)
@@ -2218,18 +2210,18 @@ func (cpu *CPU) op_rep() {
 }
 
 // SEt Processor status bits
-func (cpu *CPU) op_sep() {
+func op_sep(cpu *CPU) {
 	tmp_flags := cpu.Flags() | cpu.Bus.EaRead(cpu.StepInfo.EA)
 	cpu.SetFlags(tmp_flags)
 }
 
 // STP - SToP the clock
-func (cpu *CPU) stp() {
+func op_stp(cpu *CPU) {
 	cpu.Stopped = true
 }
 
 // STZ - STore Zero
-func (cpu *CPU) op_stz() {
+func op_stz(cpu *CPU) {
 	if cpu.M == 1 {
 		cpu.cmdWrite(0x00)
 	} else {
@@ -2238,7 +2230,7 @@ func (cpu *CPU) op_stz() {
 }
 
 // TCD - Transfer C accumulator to Direct register
-func (cpu *CPU) op_tcd() {
+func op_tcd(cpu *CPU) {
 	if cpu.M == 1 {
 		cpu.RD = (uint16(cpu.RAh) << 8) | uint16(cpu.RAl)
 	} else {
@@ -2248,7 +2240,7 @@ func (cpu *CPU) op_tcd() {
 }
 
 // TCS - Transfer C accumulator to Stack pointer
-func (cpu *CPU) op_tcs() {
+func op_tcs(cpu *CPU) {
 	var src uint16
 	if cpu.M == 1 {
 		src = (uint16(cpu.RAh) << 8) | uint16(cpu.RAl)
@@ -2264,7 +2256,7 @@ func (cpu *CPU) op_tcs() {
 }
 
 // TCD - Transfer Direct register to C accumulator
-func (cpu *CPU) op_tdc() {
+func op_tdc(cpu *CPU) {
 	if cpu.M == 1 {
 		cpu.RAh = byte(cpu.RD >> 8)
 		cpu.RAl = byte(cpu.RD)
@@ -2275,7 +2267,7 @@ func (cpu *CPU) op_tdc() {
 }
 
 // Test and Reset Bits
-func (cpu *CPU) op_trb() {
+func op_trb(cpu *CPU) {
 	if cpu.M == 1 {
 		value := cpu.cmdRead()
 		cpu.setZ8(value & cpu.RAl)
@@ -2288,7 +2280,7 @@ func (cpu *CPU) op_trb() {
 }
 
 // Test and Set Bits
-func (cpu *CPU) op_tsb() {
+func op_tsb(cpu *CPU) {
 	if cpu.M == 1 {
 		value := cpu.cmdRead()
 		cpu.setZ8(value & cpu.RAl)
@@ -2301,7 +2293,7 @@ func (cpu *CPU) op_tsb() {
 }
 
 // TSC - Transfer Stack pointer to C accumulator
-func (cpu *CPU) op_tsc() {
+func op_tsc(cpu *CPU) {
 	if cpu.M == 1 {
 		cpu.RAh = byte(cpu.SP >> 8)
 		cpu.RAl = byte(cpu.SP)
@@ -2312,7 +2304,7 @@ func (cpu *CPU) op_tsc() {
 }
 
 // TXY - Transfer X register to Y register
-func (cpu *CPU) op_txy() {
+func op_txy(cpu *CPU) {
 	if cpu.X == 1 {
 		cpu.RYl = cpu.RXl
 		cpu.setZN8(cpu.RYl)
@@ -2323,7 +2315,7 @@ func (cpu *CPU) op_txy() {
 }
 
 // TYX - Transfer Y register to X register
-func (cpu *CPU) op_tyx() {
+func op_tyx(cpu *CPU) {
 	if cpu.X == 1 {
 		cpu.RXl = cpu.RYl
 		cpu.setZN8(cpu.RXl)
@@ -2334,7 +2326,7 @@ func (cpu *CPU) op_tyx() {
 }
 
 // WAI - WAit for Interrupt
-func (cpu *CPU) wai() {
+func op_wai(cpu *CPU) {
 }
 
 // WDM - William D. Mensch, Jr.
@@ -2342,7 +2334,7 @@ func (cpu *CPU) wai() {
 // values: 0-9  increase counter
 //
 //	>=10 are interpreted by emulator
-func (cpu *CPU) op_wdm() {
+func op_wdm(cpu *CPU) {
 	cpu.WDM = cpu.cmdRead()
 
 	// invoke callback:
@@ -2353,7 +2345,7 @@ func (cpu *CPU) op_wdm() {
 }
 
 // XBA - eXchange B and A accumulator
-func (cpu *CPU) op_xba() {
+func op_xba(cpu *CPU) {
 	if cpu.M == 1 {
 		cpu.RAh, cpu.RAl = cpu.RAl, cpu.RAh
 		cpu.setZN8(cpu.RAl)
@@ -2366,7 +2358,7 @@ func (cpu *CPU) op_xba() {
 }
 
 // XCE - eXchange Carry and Emulation flags
-func (cpu *CPU) op_xce() {
+func op_xce(cpu *CPU) {
 	c := cpu.C
 	cpu.C = cpu.E
 	if c == 1 {
@@ -2382,6 +2374,6 @@ func (cpu *CPU) op_xce() {
 }
 
 // unknown opcode - XXX - todo PANIC?
-func (cpu *CPU) op_xxx() {
+func op_xxx(cpu *CPU) {
 	log.Fatalf("unknown instruction %02x at $%04x", cpu.nRead(cpu.RK, cpu.PC), cpu.PC)
 }

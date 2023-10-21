@@ -28,7 +28,7 @@ func (c *CPU) DisassembleTo(myPC uint16, o []byte) []byte {
 
 	//opcode := c.Read(myPC)
 	opcode := c.nRead(c.RK, myPC)
-	mode := c.instructions[opcode].mode
+	mode := instructions[opcode].mode
 
 	// crude and incosistent size adjust
 	var sizeAdjust byte
@@ -39,8 +39,8 @@ func (c *CPU) DisassembleTo(myPC uint16, o []byte) []byte {
 		sizeAdjust = c.X
 	}
 
-	bytes := c.instructions[opcode].size - sizeAdjust
-	name := c.instructions[opcode].name
+	bytes := instructions[opcode].size - sizeAdjust
+	name := instructions[opcode].name
 
 	xb.Db(c.Cycles).C('\t').X02(c.RK).C(':').X04(myPC).C('|')
 
