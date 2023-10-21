@@ -10,7 +10,7 @@ import (
 type System struct {
 	// emulated system:
 	Bus bus.Bus
-	CPU *cpu65c816.CPU
+	CPU cpu65c816.CPU
 
 	ROM  [0x1000000]byte
 	WRAM [0x20000]byte
@@ -29,7 +29,7 @@ type Reserver interface {
 
 func (s *System) CreateEmulator() (err error) {
 	// Create CPU:
-	s.CPU, _ = cpu65c816.New(&s.Bus)
+	s.CPU.Init(&s.Bus)
 
 	// map in ROM to Bus; parts of this mapping will be overwritten:
 	for b := uint32(0); b < 0x40; b++ {
