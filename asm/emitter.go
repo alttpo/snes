@@ -631,6 +631,27 @@ func (a *Emitter) STA_dp(addr uint8) {
 	a.emit2("sta.b", "$%02[1]x", d)
 }
 
+func (a *Emitter) STY_abs(offs uint16) {
+	var d [3]byte
+	d[0] = 0x8C
+	d[1], d[2] = imm16(offs)
+	a.emit3("sty.w", "$%02[2]x%02[1]x", d)
+}
+
+func (a *Emitter) STY_dp(addr uint8) {
+	var d [2]byte
+	d[0] = 0x84
+	d[1] = addr
+	a.emit2("sty.b", "$%02[1]x", d)
+}
+
+func (a *Emitter) STY_dp_x(addr uint8) {
+	var d [2]byte
+	d[0] = 0x94
+	d[1] = addr
+	a.emit2("sty.b", "$%02[1]x,X", d)
+}
+
 func (a *Emitter) ORA_long(addr uint32) {
 	var d [4]byte
 	d[0] = 0x0F
