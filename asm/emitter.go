@@ -603,6 +603,13 @@ func (a *Emitter) LDA_abs_x(addr uint16) {
 	a.emit3("lda.w", "$%02[2]x%02[1]x,X", d)
 }
 
+func (a *Emitter) LDA_long_x(addr uint32) {
+	var d [4]byte
+	d[0] = 0xBF
+	d[1], d[2], d[3] = imm24(addr)
+	a.emit4("lda.l", "$%02[3]x%02[2]x%02[1]x,X", d)
+}
+
 func (a *Emitter) STA_long(addr uint32) {
 	var d [4]byte
 	d[0] = 0x8F
@@ -860,6 +867,20 @@ func (a *Emitter) INC_abs(offs uint16) {
 	a.emit3("inc.w", "$%02[2]x%02[1]x", d)
 }
 
+func (a *Emitter) DEC_dp(addr uint8) {
+	var d [2]byte
+	d[0] = 0xC6
+	d[1] = addr
+	a.emit2("dec.b", "$%02[1]x", d)
+}
+
+func (a *Emitter) DEC_abs(offs uint16) {
+	var d [3]byte
+	d[0] = 0xCE
+	d[1], d[2] = imm16(offs)
+	a.emit3("dec.w", "$%02[2]x%02[1]x", d)
+}
+
 func (a *Emitter) LDA_dp(addr uint8) {
 	var d [2]byte
 	d[0] = 0xA5
@@ -907,6 +928,16 @@ func (a *Emitter) AND_imm8_b(m uint8) {
 	d[0] = 0x29
 	d[1] = m
 	a.emit2("and.b", "#$%02x", d)
+}
+
+func (a *Emitter) AND_imm16_w(m uint16) {
+	if !a.IsM16bit() {
+		panic(fmt.Errorf("asm: AND_imm16_w called but 'm' flag is 8-bit; call REP(0x20) or AssumeREP(0x20) first"))
+	}
+	var d [3]byte
+	d[0] = 0x29
+	d[1], d[2] = imm16(m)
+	a.emit3("and.w", "#$%02[2]x%02[1]x", d)
 }
 
 func (a *Emitter) PHB() {
@@ -1032,4 +1063,22 @@ func (a *Emitter) STP() {
 
 func (a *Emitter) TXA() {
 	a.emit1("txa", [1]byte{0x8A})
+}
+
+func (a *Emitter) TAX() {
+	a.emit1("tax", [1]byte{0xAA})
+}
+
+func (a *Emitter) SBC_imm8_b(m uint8) {
+	if a.IsM16bit() {
+		panic(fmt.Errorf("asm: LDA_imm8_b called but 'm' flag is 16-bit; call SEP(0x20) or AssumeSEP(0x20) first"))
+	}
+	var d [2]byte
+	d[0] = 0xE9
+	d[1] = m
+	a.emit2("sbc.b", "#$%02[1]x", d)
+}
+
+func (a *Emitter) ASL() {
+	a.emit1("asl", [1]byte{0x0A})
 }
