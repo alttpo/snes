@@ -50,6 +50,7 @@ type asmLine struct {
 
 	// instruction and parameters:
 	address    uint32
+	byteCount  int
 	ins        string
 	label      string
 	argsFormat string
@@ -218,6 +219,87 @@ func (a *Emitter) WriteTextTo(w io.Writer) (err error) {
 	return
 }
 
+func (a *Emitter) WriteHexTo(w io.Writer) (err error) {
+	if w == nil {
+		return
+	}
+
+	for _, line := range a.lines {
+		offs := line.address - a.base
+
+		var oa [120]byte
+		xb := xbuf.B(oa[:0])
+		switch line.asmLineType {
+		case lineBase:
+			//_, err = fmt.Fprintf(w, "base $%06x\n", line.address)
+			xb.S("// base $").X06(line.address)
+		case lineComment:
+			//_, err = fmt.Fprintf(w, "    ; %s\n", line.ins)
+			xb.S("// ").S(line.ins)
+		case lineLabel:
+			label := line.label
+			//_, err = fmt.Fprintf(w, "%s:\n", label)
+			xb.S("// ").S(label).C(':')
+		case lineDB:
+			//_, err = fmt.Fprintf(w, "    ; $%06x\n    %s\n", line.address, line.ins)
+			d := a.code[offs : offs+uint32(line.byteCount)]
+			for i, b := range d {
+				if i > 0 {
+					xb.C(' ')
+				}
+				xb.S("0x").X02(b)
+				xb.C(',')
+			}
+		case lineIns1:
+			d := a.code[offs : offs+1]
+			xb.S("0x").X02(d[0]).C(',')
+			xb.Sn("", (4-line.byteCount)*6).S(" // ").S(line.ins)
+		case lineIns2:
+			d := a.code[offs : offs+2]
+			args := fmt.Sprintf(line.argsFormat, d[1])
+			xb.S("0x").X02(d[0]).C(',')
+			xb.C(' ').S("0x").X02(d[1]).C(',')
+			xb.Sn("", (4-line.byteCount)*6).S(" // ").Sn(line.ins, 5).C(' ').S(args)
+		case lineIns2Label:
+			d := a.code[offs : offs+2]
+			label := line.label
+			xb.S("0x").X02(d[0]).C(',')
+			xb.C(' ').S("0x").X02(d[1]).C(',')
+			xb.Sn("", (4-line.byteCount)*6).S(" // ").Sn(line.ins, 5).C(' ').S(label)
+		case lineIns3:
+			d := a.code[offs : offs+3]
+			args := fmt.Sprintf(line.argsFormat, d[1], d[2])
+			xb.S("0x").X02(d[0]).C(',')
+			xb.C(' ').S("0x").X02(d[1]).C(',')
+			xb.C(' ').S("0x").X02(d[2]).C(',')
+			xb.Sn("", (4-line.byteCount)*6).S(" // ").Sn(line.ins, 5).C(' ').S(args)
+		case lineIns3Label:
+			d := a.code[offs : offs+3]
+			label := line.label
+			args := fmt.Sprintf(line.argsFormat, label)
+			xb.S("0x").X02(d[0]).C(',')
+			xb.C(' ').S("0x").X02(d[1]).C(',')
+			xb.C(' ').S("0x").X02(d[2]).C(',')
+			xb.Sn("", (4-line.byteCount)*6).S(" // ").Sn(line.ins, 5).C(' ').S(args)
+		case lineIns4:
+			d := a.code[offs : offs+4]
+			args := fmt.Sprintf(line.argsFormat, d[1], d[2], d[3])
+			xb.S("0x").X02(d[0]).C(',')
+			xb.C(' ').S("0x").X02(d[1]).C(',')
+			xb.C(' ').S("0x").X02(d[2]).C(',')
+			xb.C(' ').S("0x").X02(d[3]).C(',')
+			xb.Sn("", (4-line.byteCount)*6).S(" // ").Sn(line.ins, 5).C(' ').S(args)
+		}
+
+		xb.C('\n')
+		_, err = w.Write(xb)
+		if err != nil {
+			return
+		}
+	}
+	return
+}
+
 func (a *Emitter) Finalize() (err error) {
 	// resolves all dangling label references in prior code
 	for label, refs := range a.danglingS8 {
@@ -270,6 +352,7 @@ func (a *Emitter) Label(name string) uint32 {
 		a.lines = append(a.lines, asmLine{
 			asmLineType: lineLabel,
 			address:     a.address,
+			byteCount:   0,
 			ins:         "",
 			label:       name,
 			argsFormat:  "",
@@ -364,6 +447,7 @@ func (a *Emitter) emit1(ins string, d [1]byte) {
 		a.lines = append(a.lines, asmLine{
 			asmLineType: lineIns1,
 			address:     a.address,
+			byteCount:   1,
 			ins:         ins,
 			argsFormat:  "",
 		})
@@ -378,6 +462,7 @@ func (a *Emitter) emit2(ins, argsFormat string, d [2]byte) {
 		a.lines = append(a.lines, asmLine{
 			asmLineType: lineIns2,
 			address:     a.address,
+			byteCount:   2,
 			ins:         ins,
 			argsFormat:  argsFormat,
 		})
@@ -392,6 +477,7 @@ func (a *Emitter) emit2Label(ins string, label string, d [2]byte) {
 		a.lines = append(a.lines, asmLine{
 			asmLineType: lineIns2Label,
 			address:     a.address,
+			byteCount:   2,
 			ins:         ins,
 			label:       label,
 		})
@@ -407,6 +493,7 @@ func (a *Emitter) emit3(ins, argsFormat string, d [3]byte) {
 		a.lines = append(a.lines, asmLine{
 			asmLineType: lineIns3,
 			address:     a.address,
+			byteCount:   3,
 			ins:         ins,
 			argsFormat:  argsFormat,
 		})
@@ -421,6 +508,7 @@ func (a *Emitter) emit3Label(ins, label string, argsFormat string, d [3]byte) {
 		a.lines = append(a.lines, asmLine{
 			asmLineType: lineIns3Label,
 			address:     a.address,
+			byteCount:   3,
 			ins:         ins,
 			label:       label,
 			argsFormat:  argsFormat,
@@ -437,6 +525,7 @@ func (a *Emitter) emit4(ins, argsFormat string, d [4]byte) {
 		a.lines = append(a.lines, asmLine{
 			asmLineType: lineIns4,
 			address:     a.address,
+			byteCount:   4,
 			ins:         ins,
 			argsFormat:  argsFormat,
 		})
@@ -458,6 +547,7 @@ func (a *Emitter) Comment(s string) {
 		a.lines = append(a.lines, asmLine{
 			asmLineType: lineComment,
 			address:     a.address,
+			byteCount:   0,
 			ins:         s,
 			argsFormat:  "",
 		})
@@ -475,6 +565,7 @@ func (a *Emitter) EmitBytes(b []byte) {
 		cl := asmLine{
 			asmLineType: lineDB,
 			address:     a.address,
+			byteCount:   blen,
 			ins:         "",
 			argsFormat:  "",
 		}
@@ -550,6 +641,10 @@ func (a *Emitter) RTS() {
 
 func (a *Emitter) RTL() {
 	a.emit1("rtl", [1]byte{0x6B})
+}
+
+func (a *Emitter) RTI() {
+	a.emit1("rti", [1]byte{0x40})
 }
 
 func (a *Emitter) LDA_imm8_b(m uint8) {
@@ -1046,6 +1141,10 @@ func (a *Emitter) XBA() {
 
 func (a *Emitter) SEI() {
 	a.emit1("sei", [1]byte{0x78})
+}
+
+func (a *Emitter) CLI() {
+	a.emit1("cli", [1]byte{0x58})
 }
 
 // WDM triggers a CPU abort
