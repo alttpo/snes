@@ -3,9 +3,10 @@ package asm
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/alttpo/snes/xbuf"
 	"io"
 	"strings"
+
+	"github.com/alttpo/snes/xbuf"
 )
 
 // Emitter implements Assembler and bytes.Buffer; a 65816 immediate assembler that emits to the buffer
@@ -957,7 +958,7 @@ func (a *Emitter) INC_dp(addr uint8) {
 
 func (a *Emitter) INC_abs(offs uint16) {
 	var d [3]byte
-	d[0] = 0xE6
+	d[0] = 0xEE
 	d[1], d[2] = imm16(offs)
 	a.emit3("inc.w", "$%02[2]x%02[1]x", d)
 }
