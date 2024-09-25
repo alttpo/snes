@@ -199,33 +199,35 @@ func (c *CPU) DisassembleTo(myPC uint16, w io.Writer) {
 	//	_, _ = fmt.Fprintf(w, "--:----│           │                 │")
 	//}
 
+	var w0, w1, w2, w3 byte
+
 	switch bytes {
 	case 4:
-		w0 := c.Bus.nRead(c.RK, myPC+0)
-		w1 := c.Bus.nRead(c.RK, myPC+1)
-		w2 := c.Bus.nRead(c.RK, myPC+2)
-		w3 := c.Bus.nRead(c.RK, myPC+3)
+		w0 = c.Bus.nRead(c.RK, myPC+0)
+		w1 = c.Bus.nRead(c.RK, myPC+1)
+		w2 = c.Bus.nRead(c.RK, myPC+2)
+		w3 = c.Bus.nRead(c.RK, myPC+3)
 		_, _ = fmt.Fprintf(w, "%d\t%02x:%04x│%02x %02x %02x %02x│%3s ",
 			c.Cycles, c.RK, myPC, w0, w1, w2, w3, name)
 		c.formatInstructionModeTo(w, mode, w0, w1, w2, w3)
 		_, _ = fmt.Fprintf(w, "│")
 	case 3:
-		w0 := c.Bus.nRead(c.RK, myPC+0)
-		w1 := c.Bus.nRead(c.RK, myPC+1)
-		w2 := c.Bus.nRead(c.RK, myPC+2)
+		w0 = c.Bus.nRead(c.RK, myPC+0)
+		w1 = c.Bus.nRead(c.RK, myPC+1)
+		w2 = c.Bus.nRead(c.RK, myPC+2)
 		_, _ = fmt.Fprintf(w, "%d\t%02x:%04x│%02x %02x %02x   │%3s ",
 			c.Cycles, c.RK, myPC, w0, w1, w2, name)
 		c.formatInstructionModeTo(w, mode, w0, w1, w2, 0)
 		_, _ = fmt.Fprintf(w, "│")
 	case 2:
-		w0 := c.Bus.nRead(c.RK, myPC+0)
-		w1 := c.Bus.nRead(c.RK, myPC+1)
+		w0 = c.Bus.nRead(c.RK, myPC+0)
+		w1 = c.Bus.nRead(c.RK, myPC+1)
 		_, _ = fmt.Fprintf(w, "%d\t%02x:%04x│%02x %02x      │%3s ",
 			c.Cycles, c.RK, myPC, w0, w1, name)
 		c.formatInstructionModeTo(w, mode, w0, w1, 0, 0)
 		_, _ = fmt.Fprintf(w, "│")
 	case 1:
-		w0 := c.Bus.nRead(c.RK, myPC+0)
+		w0 = c.Bus.nRead(c.RK, myPC+0)
 		_, _ = fmt.Fprintf(w, "%d\t%02x:%04x│%02x         │%3s ",
 			c.Cycles, c.RK, myPC, w0, name)
 		c.formatInstructionModeTo(w, mode, w0, 0, 0, 0)
@@ -246,6 +248,8 @@ func (c *CPU) DisassembleTo(myPC uint16, w io.Writer) {
 	} else if c.M != 0 && c.X != 0 {
 		_, _ = fmt.Fprintf(w, " A=--%02x X=--%02x Y=--%02x", c.RAl, c.RXl, c.RYl)
 	}
+
+	_, _ = fmt.Fprintf(w, " S=%04X", c.SP)
 	_, _ = fmt.Fprintf(w, " %s%s%s%s%s%s%s%s",
 		printCPUFlags(c.N, "N"),
 		printCPUFlags(c.V, "V"),
@@ -256,6 +260,8 @@ func (c *CPU) DisassembleTo(myPC uint16, w io.Writer) {
 		printCPUFlags(c.Z, "Z"),
 		printCPUFlags(c.C, "C"),
 	)
+
+	c.formatInstructionAncillaryTo(w, mode, w0, w1, w2, w3)
 }
 
 func (c *CPU) formatInstructionModeTo(w io.Writer, mode byte, w0 byte, w1 byte, w2 byte, w3 byte) {
@@ -344,4 +350,10 @@ func (c *CPU) formatInstructionModeTo(w io.Writer, mode byte, w0 byte, w1 byte, 
 	_, _ = w.Write(spaces[n:13])
 
 	return
+}
+
+func (c *CPU) formatInstructionAncillaryTo(w io.Writer, mode byte, w0 byte, w1 byte, w2 byte, w3 byte) {
+
+	_, _ = fmt.Fprintf(w, " # ea=%06x, addr=%04x", c.StepInfo.EA, c.StepInfo.Addr)
+
 }
