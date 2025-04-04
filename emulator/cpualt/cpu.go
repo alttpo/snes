@@ -771,10 +771,6 @@ func (cpu *CPU) Step() (int, bool) {
 
 	//cycles := cpu.Cycles
 
-	if cb, ok := cpu.OnPC[uint32(cpu.RK)<<16|uint32(cpu.PC)]; ok {
-		cb()
-	}
-
 	switch cpu.Interrupt {
 	case interruptNMI:
 		cpu.nmi()
