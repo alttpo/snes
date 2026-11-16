@@ -88,69 +88,122 @@ func TestEmitter_OpenHCPortal(t *testing.T) {
 
 		// check if in dungeon:
 		a.LDA_dp(0x1B)
-		a.BNE_imm8(0x6F - 0x06) // exit
+		a.BNE("hcportal_exit")
 		// check if in HC overworld:
 		a.LDA_dp(0x8A)
 		a.CMP_imm8_b(0x1B)
-		a.BNE_imm8(0x6F - 0x0C) // exit
+		a.BNE("hcportal_exit")
 
 		a.Comment("find free sprite slot:")
-		a.LDX_imm8_b(0x0f)      //   LDX   #$0F
-		_ = 0                   // loop:
-		a.LDA_abs_x(0x0DD0)     //   LDA.w $0DD0,X
-		a.BEQ_imm8(0x05)        //   BEQ   found
-		a.DEX()                 //   DEX
-		a.BPL_imm8(-8)          //   BPL   loop
-		a.BRA_imm8(0x6F - 0x18) //   BRA   exit
-		_ = 0                   // found:
+		a.LDX_imm8_b(0x0f)
+		a.Label("hcportal_nextslot")
+		a.LDA_abs_x(0x0DD0)
+		a.BEQ("hcportal_open")
+		a.DEX()
+		a.BPL("hcportal_nextslot")
+		a.BRA("hcportal_exit")
 
-		a.Comment("open portal at HC:")
+		a.Label("hcportal_open")
+		a.Comment("open HC portal:")
+
+		if true {
+			// X = sprite to reset
+			a.JSL(0x0DB871)
+			//a.JSL(g.romFunctions[fnResetSpriteProperties])
+		} else {
+			// NOTE: this clearing of sprite properties is handled by ResetSpriteProperties:
+			// zero filler / not important state:
+			a.STZ_abs_x(0x0D40)
+			a.STZ_abs_x(0x0D50)
+			a.STZ_abs_x(0x0D60)
+			a.STZ_abs_x(0x0D70)
+			a.STZ_abs_x(0x0D80)
+
+			a.STZ_abs_x(0x0DA0)
+			a.STZ_abs_x(0x0DB0)
+			a.STZ_abs_x(0x0DC0)
+
+			a.STZ_abs_x(0x0DE0)
+			a.STZ_abs_x(0x0DF0)
+			a.STZ_abs_x(0x0E00)
+			a.STZ_abs_x(0x0E10)
+
+			a.STZ_abs_x(0x0E30)
+
+			a.STZ_abs_x(0x0E50)
+
+			a.STZ_abs_x(0x0E70)
+			a.STZ_abs_x(0x0E80)
+			a.STZ_abs_x(0x0E90)
+			a.STZ_abs_x(0x0EA0)
+			a.STZ_abs_x(0x0EB0)
+			a.STZ_abs_x(0x0EC0)
+			a.STZ_abs_x(0x0ED0)
+			a.STZ_abs_x(0x0EE0)
+			a.STZ_abs_x(0x0EF0)
+
+			a.STZ_abs_x(0x0F10)
+			a.STZ_abs_x(0x0F20)
+			a.STZ_abs_x(0x0F30)
+			a.STZ_abs_x(0x0F40)
+
+			a.STZ_abs_x(0x0F80)
+			a.STZ_abs_x(0x0F90)
+
+			a.STZ_abs_x(0x0FC0)
+			a.STZ_abs_x(0x0FD0)
+			a.STZ_abs_x(0x0FE0)
+			a.STZ_abs_x(0x0FF0)
+		}
+		// whirlpool sprite / CastleWarp:
+		a.LDA_imm8_b(0xBA)
+		a.STA_abs_x(0x0E20)
+		// active, RE: CheckIfActive_bank1E
+		a.LDA_imm8_b(0x09)
+		a.STA_abs_x(0x0DD0)
+		a.LDA_imm8_b(0x80)
+		a.STA_abs_x(0x0CAA) // = $80
+		a.STZ_abs_x(0x0F00) // = $00
+		// harmless sprite:
+		a.STA_abs_x(0x0E40) // = $80
 		// Y:
 		a.LDA_imm8_b(0x50)
 		a.STA_abs_x(0x0D00)
 		a.LDA_imm8_b(0x08)
 		a.STA_abs_x(0x0D20)
 		// X:
-		a.LDA_imm8_b(0xe0)
+		a.LDA_imm8_b(0xE0)
 		a.STA_abs_x(0x0D10)
 		a.LDA_imm8_b(0x07)
 		a.STA_abs_x(0x0D30)
-		// zeros:
-		a.STZ_abs_x(0x0D40)
-		a.STZ_abs_x(0x0D50)
-		a.STZ_abs_x(0x0D60)
-		a.STZ_abs_x(0x0D70)
-		a.STZ_abs_x(0x0D80)
 		// gfx?
 		a.LDA_imm8_b(0x01)
-		a.STA_abs_x(0x0D90)
+		a.STA_abs_x(0x0D90) // = $01
 		// hitbox/persist:
-		a.STA_abs_x(0x0F60)
-		// zeros:
-		a.STZ_abs_x(0x0DA0)
-		a.STZ_abs_x(0x0DB0)
-		a.STZ_abs_x(0x0DC0)
-		// active
-		a.LDA_imm8_b(0x09)
-		a.STA_abs_x(0x0DD0)
-		// zeros:
-		a.STZ_abs_x(0x0DE0)
-		a.STZ_abs_x(0x0DF0)
-		a.STZ_abs_x(0x0E00)
-		a.STZ_abs_x(0x0E10)
-		// whirlpool
-		a.LDA_imm8_b(0xBA)
-		a.STA_abs_x(0x0E20)
-		// zeros:
-		a.STZ_abs_x(0x0E30)
-		// harmless
-		a.LDA_imm8_b(0x80)
-		a.STA_abs_x(0x0E40)
+		a.STA_abs_x(0x0F60) // = $01 ; important for screen coordinate check
+		a.STZ_abs_x(0x0F70) // = $00 ; important for screen coordinate check
 		// OAM:
 		a.LDA_imm8_b(0x04)
-		a.STA_abs_x(0x0F50)
+		a.STA_abs_x(0x0F50) // = $04
+		// 0E60 = 44
+		a.LDA_imm8_b(0x44)
+		a.STA_abs_x(0x0E60)
+		// 0FA0 = 3E
+		a.LDA_imm8_b(0x3E)
+		a.STA_abs_x(0x0FA0) // = $3E
+		// 0FB0 = 06
+		a.LDA_imm8_b(0x06)
+		a.STA_abs_x(0x0FB0) // = $06
+
 		// exit:
+		a.Label("hcportal_exit")
 		a.REP(0x30)
+	}
+
+	err := a.Finalize()
+	if err != nil {
+		t.Fatal(err)
+		return
 	}
 
 	a.WriteTextTo(log.Writer())
