@@ -1182,3 +1182,114 @@ func (a *Emitter) SBC_imm8_b(m uint8) {
 func (a *Emitter) ASL() {
 	a.emit1("asl", [1]byte{0x0A})
 }
+
+func (a *Emitter) LSR() {
+	a.emit1("lsr", [1]byte{0x4A})
+}
+
+func (a *Emitter) SEC() {
+	a.emit1("sec", [1]byte{0x38})
+}
+
+func (a *Emitter) INX() {
+	a.emit1("inx", [1]byte{0xE8})
+}
+
+func (a *Emitter) INY() {
+	a.emit1("iny", [1]byte{0xC8})
+}
+
+func (a *Emitter) TAY() {
+	a.emit1("tay", [1]byte{0xA8})
+}
+
+func (a *Emitter) TYA() {
+	a.emit1("tya", [1]byte{0x98})
+}
+
+func (a *Emitter) ADC_imm16_w(m uint16) {
+	if !a.IsM16bit() {
+		panic(fmt.Errorf("asm: ADC_imm16_w called but 'm' flag is 8-bit; call REP(0x20) or AssumeREP(0x20) first"))
+	}
+	var d [3]byte
+	d[0] = 0x69
+	d[1], d[2] = imm16(m)
+	a.emit3("adc.w", "#$%02[2]x%02[1]x", d)
+}
+
+func (a *Emitter) SBC_dp(addr uint8) {
+	a.emit2("sbc.b", "$%02[1]x", [2]byte{0xE5, addr})
+}
+
+// SBC_sr subtracts the value at the stack-relative offset (1 = the last value pushed).
+func (a *Emitter) SBC_sr(offs uint8) {
+	a.emit2("sbc", "$%02[1]x,S", [2]byte{0xE3, offs})
+}
+
+func (a *Emitter) CMP_dp(addr uint8) {
+	a.emit2("cmp.b", "$%02[1]x", [2]byte{0xC5, addr})
+}
+
+func (a *Emitter) CMP_long_x(addr uint32) {
+	var d [4]byte
+	d[0] = 0xDF
+	d[1], d[2], d[3] = imm24(addr)
+	a.emit4("cmp.l", "$%02[3]x%02[2]x%02[1]x,X", d)
+}
+
+func (a *Emitter) CPX_imm16_w(m uint16) {
+	if !a.IsX16bit() {
+		panic(fmt.Errorf("asm: CPX_imm16_w called but 'x' flag is 8-bit; call REP(0x10) or AssumeREP(0x10) first"))
+	}
+	var d [3]byte
+	d[0] = 0xE0
+	d[1], d[2] = imm16(m)
+	a.emit3("cpx.w", "#$%02[2]x%02[1]x", d)
+}
+
+func (a *Emitter) EOR_imm16_w(m uint16) {
+	if !a.IsM16bit() {
+		panic(fmt.Errorf("asm: EOR_imm16_w called but 'm' flag is 8-bit; call REP(0x20) or AssumeREP(0x20) first"))
+	}
+	var d [3]byte
+	d[0] = 0x49
+	d[1], d[2] = imm16(m)
+	a.emit3("eor.w", "#$%02[2]x%02[1]x", d)
+}
+
+func (a *Emitter) STA_long_x(addr uint32) {
+	var d [4]byte
+	d[0] = 0x9F
+	d[1], d[2], d[3] = imm24(addr)
+	a.emit4("sta.l", "$%02[3]x%02[2]x%02[1]x,X", d)
+}
+
+func (a *Emitter) PEA(m uint16) {
+	var d [3]byte
+	d[0] = 0xF4
+	d[1], d[2] = imm16(m)
+	a.emit3("pea", "$%02[2]x%02[1]x", d)
+}
+
+// BNE_far branches to label when Z is clear, without the signed 8-bit range limit of BNE. It emits BEQ over a
+// JMP to label, so label must be in the same bank.
+func (a *Emitter) BNE_far(label string) {
+	a.BEQ_imm8(0x03)
+	a.JMP_abs(label)
+}
+
+// JSRBanked calls a routine that returns with RTS from code in any bank. The routine and rtl must be in the same
+// bank, and rtl must be the address of an RTL instruction. It pushes our return address for the RTL and then rtl-1
+// for the routine's RTS; the routine's RTS returns to that RTL which returns to us. Registers are passed through
+// untouched.
+func (a *Emitter) JSRBanked(routine, rtl uint32) {
+	if routine&0xFF0000 != rtl&0xFF0000 {
+		panic(fmt.Errorf("asm: JSRBanked: routine $%06x and rtl $%06x must be in the same bank", routine, rtl))
+	}
+	// PHK + PEA + PEA + JML = 11 bytes; the return address is the instruction after the JML:
+	ret := a.PC() + 11
+	a.PHK()
+	a.PEA(uint16(ret - 1))
+	a.PEA(uint16(rtl - 1))
+	a.JML(routine)
+}
