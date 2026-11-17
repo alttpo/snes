@@ -1271,6 +1271,99 @@ func (a *Emitter) PEA(m uint16) {
 	a.emit3("pea", "$%02[2]x%02[1]x", d)
 }
 
+func (a *Emitter) SBC_abs(addr uint16) {
+	var d [3]byte
+	d[0] = 0xED
+	d[1], d[2] = imm16(addr)
+	a.emit3("sbc.w", "$%02[2]x%02[1]x", d)
+}
+
+func (a *Emitter) SBC_long(addr uint32) {
+	var d [4]byte
+	d[0] = 0xEF
+	d[1], d[2], d[3] = imm24(addr)
+	a.emit4("sbc.l", "$%02[3]x%02[2]x%02[1]x", d)
+}
+
+func (a *Emitter) CMP_abs(addr uint16) {
+	var d [3]byte
+	d[0] = 0xCD
+	d[1], d[2] = imm16(addr)
+	a.emit3("cmp.w", "$%02[2]x%02[1]x", d)
+}
+
+func (a *Emitter) ORA_abs(addr uint16) {
+	var d [3]byte
+	d[0] = 0x0D
+	d[1], d[2] = imm16(addr)
+	a.emit3("ora.w", "$%02[2]x%02[1]x", d)
+}
+
+func (a *Emitter) ORA_abs_y(addr uint16) {
+	var d [3]byte
+	d[0] = 0x19
+	d[1], d[2] = imm16(addr)
+	a.emit3("ora.w", "$%02[2]x%02[1]x,Y", d)
+}
+
+func (a *Emitter) LDA_abs_y(addr uint16) {
+	var d [3]byte
+	d[0] = 0xB9
+	d[1], d[2] = imm16(addr)
+	a.emit3("lda.w", "$%02[2]x%02[1]x,Y", d)
+}
+
+func (a *Emitter) STA_abs_y(addr uint16) {
+	var d [3]byte
+	d[0] = 0x99
+	d[1], d[2] = imm16(addr)
+	a.emit3("sta.w", "$%02[2]x%02[1]x,Y", d)
+}
+
+func (a *Emitter) CPY_imm16_w(m uint16) {
+	if !a.IsX16bit() {
+		panic(fmt.Errorf("asm: CPY_imm16_w called but 'x' flag is 8-bit; call REP(0x10) or AssumeREP(0x10) first"))
+	}
+	var d [3]byte
+	d[0] = 0xC0
+	d[1], d[2] = imm16(m)
+	a.emit3("cpy.w", "#$%02[2]x%02[1]x", d)
+}
+
+func (a *Emitter) BIT_imm16_w(m uint16) {
+	if !a.IsM16bit() {
+		panic(fmt.Errorf("asm: BIT_imm16_w called but 'm' flag is 8-bit; call REP(0x20) or AssumeREP(0x20) first"))
+	}
+	var d [3]byte
+	d[0] = 0x89
+	d[1], d[2] = imm16(m)
+	a.emit3("bit.w", "#$%02[2]x%02[1]x", d)
+}
+
+func (a *Emitter) EOR_imm8_b(m uint8) {
+	if a.IsM16bit() {
+		panic(fmt.Errorf("asm: EOR_imm8_b called but 'm' flag is 16-bit; call SEP(0x20) or AssumeSEP(0x20) first"))
+	}
+	var d [2]byte
+	d[0] = 0x49
+	d[1] = m
+	a.emit2("eor.b", "#$%02x", d)
+}
+
+func (a *Emitter) TSB_abs(addr uint16) {
+	var d [3]byte
+	d[0] = 0x0C
+	d[1], d[2] = imm16(addr)
+	a.emit3("tsb.w", "$%02[2]x%02[1]x", d)
+}
+
+func (a *Emitter) AND_long(addr uint32) {
+	var d [4]byte
+	d[0] = 0x2F
+	d[1], d[2], d[3] = imm24(addr)
+	a.emit4("and.l", "$%02[3]x%02[2]x%02[1]x", d)
+}
+
 // BNE_far branches to label when Z is clear, without the signed 8-bit range limit of BNE. It emits BEQ over a
 // JMP to label, so label must be in the same bank.
 func (a *Emitter) BNE_far(label string) {

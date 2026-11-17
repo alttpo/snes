@@ -26,6 +26,18 @@ func TestEmitter_Encodings(t *testing.T) {
 		{"EOR_imm16_w", func(a *Emitter) { a.EOR_imm16_w(0x0001) }, []byte{0x49, 0x01, 0x00}},
 		{"STA_long_x", func(a *Emitter) { a.STA_long_x(0x7E2000) }, []byte{0x9F, 0x00, 0x20, 0x7E}},
 		{"PEA", func(a *Emitter) { a.PEA(0xABCD) }, []byte{0xF4, 0xCD, 0xAB}},
+		{"SBC_abs", func(a *Emitter) { a.SBC_abs(0x0352) }, []byte{0xED, 0x52, 0x03}},
+		{"SBC_long", func(a *Emitter) { a.SBC_long(0x7E011A) }, []byte{0xEF, 0x1A, 0x01, 0x7E}},
+		{"CMP_abs", func(a *Emitter) { a.CMP_abs(0x6234) }, []byte{0xCD, 0x34, 0x62}},
+		{"ORA_abs", func(a *Emitter) { a.ORA_abs(0x6234) }, []byte{0x0D, 0x34, 0x62}},
+		{"ORA_abs_y", func(a *Emitter) { a.ORA_abs_y(0x6234) }, []byte{0x19, 0x34, 0x62}},
+		{"LDA_abs_y", func(a *Emitter) { a.LDA_abs_y(0x0800) }, []byte{0xB9, 0x00, 0x08}},
+		{"STA_abs_y", func(a *Emitter) { a.STA_abs_y(0x6040) }, []byte{0x99, 0x40, 0x60}},
+		{"CPY_imm16_w", func(a *Emitter) { a.CPY_imm16_w(0x0200) }, []byte{0xC0, 0x00, 0x02}},
+		{"BIT_imm16_w", func(a *Emitter) { a.BIT_imm16_w(0x0100) }, []byte{0x89, 0x00, 0x01}},
+		{"EOR_imm8_b", func(a *Emitter) { a.SEP(0x20); a.EOR_imm8_b(0x01) }, []byte{0xE2, 0x20, 0x49, 0x01}},
+		{"TSB_abs", func(a *Emitter) { a.TSB_abs(0x62FE) }, []byte{0x0C, 0xFE, 0x62}},
+		{"AND_long", func(a *Emitter) { a.AND_long(0x7062FE) }, []byte{0x2F, 0xFE, 0x62, 0x70}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
