@@ -130,3 +130,39 @@ func TestSystem_CreateEmulator(t *testing.T) {
 		})
 	}
 }
+
+func TestSystem_DMAFromWRAMPort(t *testing.T) {
+	s := &System{}
+	if err := s.CreateEmulator(); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 0x10; i++ {
+		s.WRAM[0x0352+i] = byte(0x40 + i)
+	}
+	w := func(a uint32, v byte) { s.Bus.EaWrite(a, v) }
+	// WMADD = $7E0352; channel 5: B bus $2180 to SRAM $70:6142, $10 bytes:
+	w(0x2181, 0x52)
+	w(0x2182, 0x03)
+	w(0x2183, 0x00)
+	w(0x4350, 0x80)
+	w(0x4351, 0x80)
+	w(0x4352, 0x42)
+	w(0x4353, 0x61)
+	w(0x4354, 0x70)
+	w(0x4355, 0x10)
+	w(0x4356, 0x00)
+	w(0x420B, 0x20)
+	for i := 0; i < 0x10; i++ {
+		if s.SRAM[0x6142+i] != byte(0x40+i) {
+			t.Fatalf("SRAM[$%04x] = $%02x; expected $%02x", 0x6142+i, s.SRAM[0x6142+i], 0x40+i)
+		}
+	}
+	// the A bus address advanced and the size counted down:
+	if s.Bus.EaRead(0x4352) != 0x52 || s.Bus.EaRead(0x4353) != 0x61 || s.Bus.EaRead(0x4355) != 0 {
+		t.Errorf("DMA registers not updated")
+	}
+	// the WRAM port advanced too:
+	if v := s.Bus.EaRead(0x2180); v != s.WRAM[0x0362] {
+		t.Errorf("WMDATA read $%02x; expected the byte after the transfer", v)
+	}
+}

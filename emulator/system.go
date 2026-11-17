@@ -124,7 +124,7 @@ func (s *System) CreateEmulator() (err error) {
 
 	// Memory-mapped IO registers:
 	{
-		hwio := &memory.FakeHW{}
+		hwio := &hwIO{s: s}
 		for b := uint32(0); b < 0x70; b++ {
 			bank := b << 16
 			err = s.Bus.Attach(
