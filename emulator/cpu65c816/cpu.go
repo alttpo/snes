@@ -720,14 +720,15 @@ func (cpu *CPU) SetFlags(flags byte) {
 	cpu.N = (flags >> 7) & 1
 }
 
+// ChangeRegisterSizes_X follows a change of the x flag. Setting it clears the high bytes of X and Y, so they are
+// zero-extended when it is cleared again.
 func (cpu *CPU) ChangeRegisterSizes_X() {
 	if cpu.X == 1 {
 		cpu.RXl = uint8(cpu.RX)
 		cpu.RYl = uint8(cpu.RY)
-	} else {
-		cpu.RX = cpu.RX&0xff00 | uint16(cpu.RXl)
-		cpu.RY = cpu.RY&0xff00 | uint16(cpu.RYl)
 	}
+	cpu.RX = uint16(cpu.RXl)
+	cpu.RY = uint16(cpu.RYl)
 }
 
 func (cpu *CPU) ChangeRegisterSizes_M() {
