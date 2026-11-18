@@ -29,6 +29,8 @@ type Emitter struct {
 	// dangling references to labels; stored as absolute addresses:
 	danglingS8  map[string][]uint32
 	danglingU16 map[string][]uint32
+	// dangling references to labels relative to the end of a 16-bit operand (BRL, PER); stored as absolute addresses:
+	danglingS16 map[string][]uint32
 }
 
 type asmLineType int
@@ -70,6 +72,7 @@ func NewEmitter(target []byte, generateText bool) *Emitter {
 		labels:       make(map[string]uint32),
 		danglingS8:   make(map[string][]uint32),
 		danglingU16:  make(map[string][]uint32),
+		danglingS16:  make(map[string][]uint32),
 	}
 	return a
 }
@@ -87,6 +90,7 @@ func (a *Emitter) Clone(target []byte) *Emitter {
 		labels:       make(map[string]uint32, len(a.labels)),
 		danglingS8:   make(map[string][]uint32, len(a.danglingS8)),
 		danglingU16:  make(map[string][]uint32, len(a.danglingU16)),
+		danglingS16:  make(map[string][]uint32, len(a.danglingS16)),
 	}
 	// copy labels and dangling references:
 	for k, v := range a.labels {
@@ -101,6 +105,11 @@ func (a *Emitter) Clone(target []byte) *Emitter {
 		cv := make([]uint32, len(v), cap(v))
 		copy(cv, v)
 		e.danglingU16[k] = cv
+	}
+	for k, v := range a.danglingS16 {
+		cv := make([]uint32, len(v), cap(v))
+		copy(cv, v)
+		e.danglingS16[k] = cv
 	}
 	return e
 }
@@ -130,6 +139,11 @@ func (a *Emitter) Append(e *Emitter) {
 		cv := make([]uint32, len(v), cap(v))
 		copy(cv, v)
 		a.danglingU16[k] = cv
+	}
+	for k, v := range e.danglingS16 {
+		cv := make([]uint32, len(v), cap(v))
+		copy(cv, v)
+		a.danglingS16[k] = cv
 	}
 }
 
@@ -193,7 +207,9 @@ func (a *Emitter) WriteTextTo(w io.Writer) (err error) {
 			d := a.code[offs : offs+3]
 			label := line.label
 			args := fmt.Sprintf(line.argsFormat, label)
-			if _, ok := a.danglingU16[label]; ok {
+			_, okU16 := a.danglingU16[label]
+			_, okS16 := a.danglingS16[label]
+			if okU16 || okS16 {
 				//_, err = fmt.Fprintf(w, "!!  %-5s %-12s ; $%06x  %02x %02x %02x  !! ERROR: undefined label '%s'\n", line.ins, args, line.address, d[0], d[1], d[2], label)
 				xb.S("!!  ").Sn(line.ins, 5).C(' ').Sn(args, 12)
 				xb.S(" ; $").X06(line.address).S("  ").X02(d[0]).C(' ').X02(d[1]).C(' ').X02(d[2])
@@ -338,6 +354,25 @@ func (a *Emitter) Finalize() (err error) {
 		delete(a.danglingU16, label)
 	}
 
+	for label, refs := range a.danglingS16 {
+		addr, ok := a.labels[label]
+		if !ok {
+			return fmt.Errorf("could not resolve label '%s'", label)
+		}
+
+		// fill in 16-bit references relative to the end of the operand; the target must be in the same bank:
+		for _, s16addr := range refs {
+			if addr&0xFF0000 != s16addr&0xFF0000 {
+				return fmt.Errorf("branch from %#06x to %#06x crosses a bank", s16addr+2, addr)
+			}
+			binary.LittleEndian.PutUint16(
+				a.code[s16addr-a.base:s16addr-a.base+2],
+				uint16(addr-(s16addr+2)))
+		}
+
+		delete(a.danglingS16, label)
+	}
+
 	return
 }
 
@@ -379,6 +414,12 @@ func (a *Emitter) addDanglingU16(label string) {
 	refs := a.danglingU16[label]
 	refs = append(refs, a.address-2)
 	a.danglingU16[label] = refs
+}
+
+func (a *Emitter) addDanglingS16(label string) {
+	refs := a.danglingS16[label]
+	refs = append(refs, a.address-2)
+	a.danglingS16[label] = refs
 }
 
 func (a *Emitter) Cap() int {
@@ -517,6 +558,24 @@ func (a *Emitter) emit3Label(ins, label string, argsFormat string, d [3]byte) {
 	}
 	a.address += 3
 	a.addDanglingU16(label)
+}
+
+// emit3LabelS16 emits a 3 byte instruction whose operand is label's address relative to the end of the instruction.
+func (a *Emitter) emit3LabelS16(ins, label string, argsFormat string, d [3]byte) {
+	_, _ = a.write(d[:])
+	if a.generateText {
+		a.emitBase()
+		a.lines = append(a.lines, asmLine{
+			asmLineType: lineIns3Label,
+			address:     a.address,
+			byteCount:   3,
+			ins:         ins,
+			label:       label,
+			argsFormat:  argsFormat,
+		})
+	}
+	a.address += 3
+	a.addDanglingS16(label)
 }
 
 func (a *Emitter) emit4(ins, argsFormat string, d [4]byte) {
@@ -1094,7 +1153,7 @@ func (a *Emitter) PLB() {
 
 func (a *Emitter) LDX_imm16_w(m uint16) {
 	if !a.IsX16bit() {
-		panic(fmt.Errorf("asm: LDA_imm16_w called but 'x' flag is 8-bit; call REP(0x10) or AssumeREP(0x10) first"))
+		panic(fmt.Errorf("asm: LDX_imm16_w called but 'x' flag is 8-bit; call REP(0x10) or AssumeREP(0x10) first"))
 	}
 	var d [3]byte
 	d[0] = 0xA2
@@ -1104,7 +1163,7 @@ func (a *Emitter) LDX_imm16_w(m uint16) {
 
 func (a *Emitter) LDY_imm16_w(m uint16) {
 	if !a.IsX16bit() {
-		panic(fmt.Errorf("asm: LDA_imm16_w called but 'x' flag is 8-bit; call REP(0x10) or AssumeREP(0x10) first"))
+		panic(fmt.Errorf("asm: LDY_imm16_w called but 'x' flag is 8-bit; call REP(0x10) or AssumeREP(0x10) first"))
 	}
 	var d [3]byte
 	d[0] = 0xA0
@@ -1171,7 +1230,7 @@ func (a *Emitter) TAX() {
 
 func (a *Emitter) SBC_imm8_b(m uint8) {
 	if a.IsM16bit() {
-		panic(fmt.Errorf("asm: LDA_imm8_b called but 'm' flag is 16-bit; call SEP(0x20) or AssumeSEP(0x20) first"))
+		panic(fmt.Errorf("asm: SBC_imm8_b called but 'm' flag is 16-bit; call SEP(0x20) or AssumeSEP(0x20) first"))
 	}
 	var d [2]byte
 	d[0] = 0xE9
