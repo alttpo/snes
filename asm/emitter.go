@@ -169,9 +169,10 @@ func (a *Emitter) WriteTextTo(w io.Writer) (err error) {
 			//_, err = fmt.Fprintf(w, "%s:\n", label)
 			xb.S(label).C(':')
 		case lineDB:
-			//_, err = fmt.Fprintf(w, "    ; $%06x\n    %s\n", line.address, line.ins)
-			xb.S("    ; $").X06(line.address).C('\n')
-			xb.S("    ").S(line.ins)
+			// the address comment goes on the same line, in a column past the longest db line EmitBytes writes:
+			//_, err = fmt.Fprintf(w, "    %-*s ; $%06x\n", dbLineWidth, line.ins, line.address)
+			xb.S("    ").Sn(line.ins, dbLineWidth)
+			xb.S(" ; $").X06(line.address)
 		case lineIns1:
 			d := a.code[offs : offs+1]
 			//_, err = fmt.Fprintf(w, "    %-5s %-12s ; $%06x  %02x\n", line.ins, "", line.address, d[0])
@@ -616,6 +617,13 @@ func (a *Emitter) Comment(s string) {
 
 const hextable = "0123456789abcdef"
 
+// dbBytesPerLine is how many bytes EmitBytes lists on each db line:
+const dbBytesPerLine = 16
+
+// dbLineWidth is the length of a db line listing dbBytesPerLine bytes ("db $xx, $xx, ..."), the column that the
+// address comments of db lines are aligned to:
+const dbLineWidth = len("db ") + dbBytesPerLine*len("$xx") + (dbBytesPerLine-1)*len(", ")
+
 func (a *Emitter) EmitBytes(b []byte) {
 	if a.generateText {
 		a.emitBase()
@@ -631,7 +639,7 @@ func (a *Emitter) EmitBytes(b []byte) {
 		}
 		for i, v := range b {
 			s.Write([]byte{'$', hextable[(v>>4)&0xF], hextable[v&0xF]})
-			if i&15 == 15 {
+			if i%dbBytesPerLine == dbBytesPerLine-1 {
 				cl.ins = s.String()
 				a.lines = append(a.lines, cl)
 				s.Reset()
