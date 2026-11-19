@@ -8,10 +8,15 @@ package emulator
 //
 // The timing is simplified: every scanline is 1,364 master clocks (341 dots of 4 clocks), a frame is 262 lines (312 if
 // PAL) with no short, long or interlaced lines, the counters advance after each CPU instruction by the clocks it took,
-// and events take effect at the instruction boundary at or after their dot.
+// and events take effect at the instruction boundary at or after their dot. The CPU is halted at the start of each line
+// for DRAM refresh and HDMA (HDMAClocks), as if those came right as the line starts.
 type PPU struct {
 	// PAL selects 312 lines per frame instead of 262.
 	PAL bool
+
+	// HDMAClocks is the master clocks HDMA halts the CPU for on each visible line (0 for none; 18 of overhead plus 8
+	// per channel and 8 per byte it transfers, on hardware). DRAM refresh halts it for 40 on every line regardless.
+	HDMAClocks int
 
 	VRAM  [0x10000]byte
 	OAM   [544]byte
@@ -57,6 +62,8 @@ type PPU struct {
 
 const (
 	ppuClocksPerLine = 1364
+	// DRAM refresh, which halts the CPU on every line:
+	ppuRefreshClocks = 40
 	ppuClocksPerDot  = 4
 	// hblank, in dots: from 274 to the end of the line, and dot 0:
 	ppuHBlankStart = 274
@@ -106,7 +113,8 @@ func (p *PPU) Reset() {
 	p.nmiFlag, p.irqFlag = false, false
 }
 
-// Advance runs the counters forward by clocks master clocks, raising NMI and IRQ as they pass the dots for them.
+// Advance runs the counters forward by clocks master clocks of the CPU's, raising NMI and IRQ as they pass the dots for
+// them; and further, for each line started, by the clocks the CPU is halted for then (DRAM refresh and HDMA).
 func (p *PPU) Advance(clocks int) {
 	for clocks > 0 {
 		n := ppuClocksPerLine - p.HClock
@@ -125,6 +133,10 @@ func (p *PPU) Advance(clocks int) {
 				p.Frame++
 			}
 			p.lineStart()
+			clocks += ppuRefreshClocks
+			if p.V < p.VBlankLine() {
+				clocks += p.HDMAClocks
+			}
 		}
 	}
 	if p.irqFlag {

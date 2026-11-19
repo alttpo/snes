@@ -88,7 +88,8 @@ func TestPPU_CountersAndLatch(t *testing.T) {
 		0xDB,
 	}
 	s := newTestSystem(t, code, ppu)
-	ppu.Advance(300*ppuClocksPerLine + 100*ppuClocksPerDot)
+	// each line started halts the CPU for DRAM refresh:
+	ppu.Advance(300*(ppuClocksPerLine-ppuRefreshClocks) + 100*ppuClocksPerDot)
 	if ppu.V != 300-262 || ppu.HDot() != 100 || ppu.Frame != 1 {
 		t.Fatalf("after 300 lines and 100 dots: V=%d H=%d frame %d; expected V=38 H=100 frame 1", ppu.V, ppu.HDot(), ppu.Frame)
 	}
@@ -106,7 +107,7 @@ func TestPPU_CountersAndLatch(t *testing.T) {
 
 	// WRIO bit 7 clear: SLHV doesn't latch:
 	s = newTestSystem(t, append([]byte{0xA9, 0x00, 0x8D, 0x01, 0x42, 0xAD, 0x3F, 0x21}, code...), ppu)
-	ppu.Advance(50 * ppuClocksPerLine)
+	ppu.Advance(50 * (ppuClocksPerLine - ppuRefreshClocks))
 	runToStop(t, s, 10_000)
 	if v := uint16(s.WRAM[0x02]) | uint16(s.WRAM[0x03])<<8; v != 50 {
 		t.Errorf("OPVCT after WRIO's latch = %d; expected 50, latched when WRIO bit 7 went low", v)
@@ -140,7 +141,8 @@ func TestPPU_NMI(t *testing.T) {
 
 	// RDNMI: set from line 225, cleared by reading it:
 	ppu.Reset()
-	ppu.Advance(225 * ppuClocksPerLine)
+	// the clocks to line 225, whose refresh then follows:
+	ppu.Advance(225*(ppuClocksPerLine-ppuRefreshClocks) + ppuRefreshClocks)
 	if v := s.Bus.EaRead(0x4210); v&0x80 == 0 {
 		t.Errorf("RDNMI = $%02x in vblank; expected bit 7 set", v)
 	}
@@ -253,5 +255,16 @@ func TestJoypadsAndMath(t *testing.T) {
 	r := uint16(s.Bus.EaRead(0x4216)) | uint16(s.Bus.EaRead(0x4217))<<8
 	if q != 0x3039/100 || r != 0x3039%100 {
 		t.Errorf("quotient %d remainder %d; expected %d %d", q, r, 0x3039/100, 0x3039%100)
+	}
+}
+
+func TestPPU_HDMAClocks(t *testing.T) {
+	ppu := &PPU{HDMAClocks: 66}
+	newTestSystem(t, nil, ppu)
+	// lines 1..224 (line 0 started at reset) lose refresh and HDMA, lines 225.. only refresh; line 235's refresh comes
+	// once the CPU reaches it:
+	ppu.Advance(235*(ppuClocksPerLine-ppuRefreshClocks) - 224*66 + ppuRefreshClocks)
+	if ppu.V != 235 || ppu.HClock != ppuRefreshClocks {
+		t.Errorf("V=%d H clock %d; expected V=235 H clock %d", ppu.V, ppu.HClock, ppuRefreshClocks)
 	}
 }
