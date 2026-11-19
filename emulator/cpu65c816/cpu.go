@@ -340,6 +340,13 @@ type CPU struct {
 	Cycles    byte   // number of cycles for this step
 	stepPC    uint16 // how many bytes should PC be increased in this step?
 	Stopped   bool   // set after STP instruction is executed
+	Waiting   bool   // set after WAI is executed, until an interrupt comes
+
+	// Clocks is the master clocks the last step took, and AllClocks their total. With the bus's access speeds
+	// (bus.Bus.Speeds) set, a step's clocks are those of its bus accesses plus 6 for each of its other cycles (internal
+	// operations); without, 8 per cycle (the slowest access but for the old joypad registers).
+	Clocks    int
+	AllClocks uint64
 
 	// previous register's value exists for debugging purposes
 	PRK byte   // previous value of program banK register
@@ -408,6 +415,8 @@ func (cpu *CPU) Reset() {
 	cpu.PC = cpu.nRead16_cross(0x00, 0xFFFC)
 	cpu.SetFlags(0x34)
 	cpu.Stopped = false
+	cpu.Waiting = false
+	cpu.Interrupt = interruptNone
 }
 
 /* ====================================================================
@@ -792,14 +801,16 @@ func (cpu *CPU) setZN16(value uint16) {
 	cpu.setN16(value)
 }
 
-// triggerNMI causes a non-maskable interrupt to occur on the next cycle
-func (cpu *CPU) triggerNMI() {
+// TriggerNMI causes a non-maskable interrupt before the next instruction (and ends a WAI).
+func (cpu *CPU) TriggerNMI() {
 	cpu.Interrupt = interruptNMI
 }
 
-// triggerIRQ causes an IRQ interrupt to occur on the next cycle
+// TriggerIRQ causes an IRQ interrupt before the next instruction, unless interrupts are disabled (I set) or an NMI is
+// pending already. An IRQ ends a WAI either way, as on the 65816.
 func (cpu *CPU) TriggerIRQ() {
-	if cpu.I == 0 {
+	cpu.Waiting = false
+	if cpu.I == 0 && cpu.Interrupt != interruptNMI {
 		cpu.Interrupt = interruptIRQ
 	}
 }
@@ -818,25 +829,43 @@ type StepInfo struct {
 	Mode byte
 }
 
-// Step executes a single CPU instruction
+// Step executes a single CPU instruction, after taking a pending interrupt, and returns the CPU cycles it took
+// (including the interrupt's) and whether the CPU is stopped (STP). The master clocks it took are in Clocks. While the
+// CPU waits for an interrupt (WAI), a step takes 1 cycle and runs nothing.
 func (cpu *CPU) Step() (int, bool) {
-
-	//if cpu.stall > 0 {
-	//	cpu.stall--
-	//	return 1
-	//}
-
-	//cycles := cpu.Cycles
-
 	if cb, ok := cpu.OnPC[uint32(cpu.RK)<<16|uint32(cpu.PC)]; ok {
 		cb()
 	}
 
+	clocks, accesses := cpu.Bus.Clocks, cpu.Bus.Accesses
+	n, stopped := cpu.step()
+	if cpu.Bus.Speeds == nil {
+		cpu.Clocks = n * 8
+	} else {
+		cpu.Clocks = int(cpu.Bus.Clocks - clocks)
+		if io := n - int(cpu.Bus.Accesses-accesses); io > 0 {
+			cpu.Clocks += io * 6
+		}
+	}
+	cpu.AllClocks += uint64(cpu.Clocks)
+	return n, stopped
+}
+
+func (cpu *CPU) step() (int, bool) {
+	if cpu.Waiting {
+		if cpu.Interrupt == interruptNone {
+			cpu.AllCycles++
+			return 1, false
+		}
+		cpu.Waiting = false
+	}
+
+	interruptCycles := 0
 	switch cpu.Interrupt {
 	case interruptNMI:
-		cpu.nmi()
+		interruptCycles = cpu.nmi()
 	case interruptIRQ:
-		cpu.irq()
+		interruptCycles = cpu.irq()
 	}
 	cpu.Interrupt = interruptNone
 
@@ -1081,38 +1110,46 @@ func (cpu *CPU) Step() (int, bool) {
 	instructions[opcode].proc(cpu)
 
 	// counter and PC update
-	cpu.AllCycles += uint64(cpu.Cycles)
+	n := int(cpu.Cycles) + interruptCycles
+	cpu.AllCycles += uint64(n)
 	cpu.PC += cpu.stepPC
 	if cpu.Stopped {
-		return int(cpu.Cycles), true
+		return n, true
 	}
-	return int(cpu.Cycles), false
+	return n, false
 }
 
-// NMI - Non-Maskable Interrupt
-// XXXX - valid for 6502
-func (cpu *CPU) nmi() {
-	cpu.push16(cpu.PC)
-	op_php(cpu)
-	//cpu.PC = cpu.Read16(0xFFFA)
-	cpu.PC = cpu.nRead16_cross(0x00, 0xFFEA)
-	cpu.I = 1
-	cpu.Cycles += 7
-}
-
-// IRQ - IRQ Interrupt
-// XXXX - valid for 6502
-func (cpu *CPU) irq() {
-
-	cpu.push(cpu.RK)
-	cpu.push16(cpu.PC) // "next instruction to be executed" means current pc because irq is processed at start of new comm.
-	cpu.push(cpu.Flags())
-
+// interrupt pushes the program bank (native mode only), the PC and the flags, disables interrupts, clears decimal
+// mode, and jumps through the vector at native (or emulation) in bank 0. It returns the cycles it took: 8 in native
+// mode, 7 in emulation mode.
+func (cpu *CPU) interrupt(native, emulation uint16) int {
+	vector, cycles := native, 8
+	if cpu.E == 1 {
+		vector, cycles = emulation, 7
+	} else {
+		cpu.push(cpu.RK)
+	}
+	cpu.push16(cpu.PC) // the next instruction's, since an interrupt is taken before it
+	if cpu.E == 1 {
+		cpu.push(cpu.Flags() &^ 0x10) // B clear: not a BRK
+	} else {
+		cpu.push(cpu.Flags())
+	}
 	cpu.I = 1
 	cpu.D = 0
 	cpu.RK = 0
-	cpu.PC = cpu.nRead16_cross(0x00, 0xFFEE)
-	//log.Println(fmt.Sprintf("\ncpu: irq triggered, PC %4X", cpu.PC))
+	cpu.PC = cpu.nRead16_cross(0x00, vector)
+	return cycles
+}
+
+// NMI - Non-Maskable Interrupt
+func (cpu *CPU) nmi() int {
+	return cpu.interrupt(0xFFEA, 0xFFFA)
+}
+
+// IRQ - IRQ Interrupt
+func (cpu *CPU) irq() int {
+	return cpu.interrupt(0xFFEE, 0xFFFE)
 }
 
 /* ====================================================================
@@ -2328,6 +2365,7 @@ func op_tyx(cpu *CPU) {
 
 // WAI - WAit for Interrupt
 func op_wai(cpu *CPU) {
+	cpu.Waiting = cpu.Interrupt == interruptNone
 }
 
 // WDM - William D. Mensch, Jr.

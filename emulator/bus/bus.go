@@ -36,8 +36,16 @@ import (
 // implement variant 1 - static table of 2^20 pointers to 16-bytes segments
 // simplest, fastest and with greater memory usage
 type Bus struct {
-	EA      uint32                 // last memory access - r/w
-	Write   bool                   // is write op?
+	EA    uint32 // last memory access - r/w
+	Write bool   // is write op?
+
+	// Speeds, if set, is the master clocks an access takes, per 256-byte page of the address space (address >> 8).
+	// While it is set, every access through EaRead, EaRead24_wrap and EaWrite adds its clocks to Clocks and counts in
+	// Accesses, which is how the CPU tells how long an instruction took; EaDump doesn't count.
+	Speeds   *[0x10000]uint8
+	Clocks   uint64
+	Accesses uint64
+
 	segment [1048576]memory.Memory // 2^10 because segments are 4bits length
 }
 
@@ -89,6 +97,10 @@ func (b *Bus) EaRead(a uint32) byte {
 	}
 	b.EA = a // for debug interface
 	b.Write = false
+	if b.Speeds != nil {
+		b.Clocks += uint64(b.Speeds[a>>8&0xFFFF])
+		b.Accesses++
+	}
 	value := mem.Read(a)
 	return value
 }
@@ -106,6 +118,12 @@ func (b *Bus) EaRead24_wrap(bank byte, addr uint16) uint32 {
 	}
 
 	b.Write = false
+	if b.Speeds != nil {
+		for i := uint32(0); i < 3; i++ {
+			b.Clocks += uint64(b.Speeds[(bank32|offs+i)>>8&0xFFFF])
+		}
+		b.Accesses += 3
+	}
 	b.EA = bank32 | (offs + 0) // for debug interface
 	ll := m0.Read(b.EA)
 	b.EA = bank32 | (offs + 1)
@@ -124,6 +142,10 @@ func (b *Bus) EaWrite(a uint32, value byte) {
 	}
 	b.EA = a // for debug interface
 	b.Write = true
+	if b.Speeds != nil {
+		b.Clocks += uint64(b.Speeds[a>>8&0xFFFF])
+		b.Accesses++
+	}
 	mem.Write(a, value)
 }
 

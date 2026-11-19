@@ -573,7 +573,25 @@ func otherTests() []cpuTest {
 
 		// the rest:
 		{name: "NOP", emit: func(a *Emitter) { a.NOP() }, bytes: []byte{0xEA}},
-		{name: "WAI", emit: func(a *Emitter) { a.WAI() }, bytes: []byte{0xCB}},
+		{
+			// WAI waits for an interrupt; an IRQ while interrupts are disabled ends the wait without being taken:
+			name: "WAI", p: flagI, emit: func(a *Emitter) { a.WAI() }, bytes: []byte{0xCB},
+			init: func(r *cpuRun) {
+				waited := 0
+				r.s.CPU.OnPC = map[uint32]func(){r.end: func() {
+					if r.s.CPU.Waiting {
+						if waited++; waited == 3 {
+							r.s.CPU.TriggerIRQ()
+						}
+					}
+				}}
+			},
+			check: func(r *cpuRun) {
+				if r.s.CPU.AllCycles < 3+3 {
+					r.t.Errorf("ran %d cycles; expected the WAI and at least 3 cycles waiting", r.s.CPU.AllCycles)
+				}
+			},
+		},
 		{
 			name: "WDM", emit: func(a *Emitter) { a.WDM(0x5A) }, bytes: []byte{0x42, 0x5A},
 			check: func(r *cpuRun) {

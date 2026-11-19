@@ -3,17 +3,25 @@ package emulator
 import "github.com/alttpo/snes/emulator/memory"
 
 // hwIO is the memory-mapped IO registers: a plain register file (memory.FakeHW) plus general purpose DMA ($420B)
-// between the A bus and the B bus registers $2100..$21FF, and the WRAM port (WMDATA $2180, WMADD $2181..$2183), so
-// that code copying WRAM to the A bus with DMA, or writing WRAM through the port, works.
+// between the A bus and the B bus registers $2100..$21FF, the WRAM port (WMDATA $2180, WMADD $2181..$2183) and
+// MEMSEL ($420D, FastROM). The registers a Device maps (System.MapIO) go to its handlers instead; written values are
+// stored in the register file either way.
 type hwIO struct {
 	memory.FakeHW
 	s *System
 	// wmadd is the WRAM port's address, $00000..$1FFFF:
 	wmadd uint32
+	// the handlers the devices mapped, per register offset - $2000:
+	readers [0x6000]func(offs uint16) byte
+	writers [0x6000]func(offs uint16, value byte)
 }
 
 func (h *hwIO) Read(address uint32) byte {
-	switch address & 0xFFFF {
+	offs := address & 0xFFFF
+	if r := h.readers[offs-0x2000]; r != nil {
+		return r(uint16(offs))
+	}
+	switch offs {
 	case 0x2180:
 		v := h.s.WRAM[h.wmadd]
 		h.wmadd = (h.wmadd + 1) & 0x1FFFF
@@ -25,6 +33,10 @@ func (h *hwIO) Read(address uint32) byte {
 func (h *hwIO) Write(address uint32, value byte) {
 	offs := address & 0xFFFF
 	h.FakeHW.Write(address, value)
+	if w := h.writers[offs-0x2000]; w != nil {
+		w(uint16(offs), value)
+		return
+	}
 	switch offs {
 	case 0x2180:
 		h.s.WRAM[h.wmadd] = value
@@ -36,11 +48,9 @@ func (h *hwIO) Write(address uint32, value byte) {
 	case 0x2183:
 		h.wmadd = h.wmadd&^0x10000 | uint32(value&1)<<16
 	case 0x420B:
-		for ch := uint32(0); ch < 8; ch++ {
-			if value&(1<<ch) != 0 {
-				h.dma(ch)
-			}
-		}
+		h.dmaStart(value)
+	case 0x420D:
+		h.s.setAccessSpeeds(value&1 != 0)
 	}
 }
 
@@ -49,8 +59,34 @@ var bOffsets = [8][]uint32{
 	{0}, {0, 1}, {0, 0}, {0, 0, 1, 1}, {0, 1, 2, 3}, {0, 1, 0, 1}, {0, 0}, {0, 0, 1, 1},
 }
 
-// dma runs a general purpose DMA transfer on channel ch, as $420B starts it.
-func (h *hwIO) dma(ch uint32) {
+// DMA timing in master clocks: the overhead of a $420B write that starts any channel, of each channel, and of each
+// byte transferred.
+const (
+	dmaStartClocks   = 18
+	dmaChannelClocks = 8
+	dmaByteClocks    = 8
+)
+
+// dmaStart runs the general purpose DMA transfers of the channels set in value, in order, as a write of value to
+// $420B starts them. The CPU is halted meanwhile: the transfers' clocks are added to the bus's (bus.Bus.Clocks) in
+// place of those of the accesses they make, which are not the CPU's.
+func (h *hwIO) dmaStart(value byte) {
+	if value == 0 {
+		return
+	}
+	b := &h.s.Bus
+	clocks, accesses := b.Clocks, b.Accesses
+	n := uint64(dmaStartClocks)
+	for ch := uint32(0); ch < 8; ch++ {
+		if value&(1<<ch) != 0 {
+			n += dmaChannelClocks + uint64(h.dma(ch))*dmaByteClocks
+		}
+	}
+	b.Clocks, b.Accesses = clocks+n, accesses
+}
+
+// dma runs a general purpose DMA transfer on channel ch and returns the number of bytes it transferred.
+func (h *hwIO) dma(ch uint32) int {
 	reg := func(r uint32) byte { return h.FakeHW.Read(0x4300 | ch<<4 | r) }
 	setReg := func(r uint32, v byte) { h.FakeHW.Write(0x4300|ch<<4|r, v) }
 
@@ -85,4 +121,5 @@ func (h *hwIO) dma(ch uint32) {
 	setReg(3, uint8(aAddr>>8))
 	setReg(5, 0)
 	setReg(6, 0)
+	return size
 }
